@@ -22,6 +22,14 @@ pnpm dev:web                  # Vite on :5173, proxies /api to :3000
 
 # Prisma
 pnpm prisma:generate          # Generate Prisma client from schema
+pnpm prisma:push              # Push schema to database (no migration files)
+
+# Infrastructure
+docker compose up -d           # Start PostgreSQL, Redis, MinIO
+cp .env.example .env           # Then edit .env if needed
+
+# Seed data
+pnpm seed                     # Create example flows via the API (requires API running)
 ```
 
 ## Architecture
@@ -29,9 +37,9 @@ pnpm prisma:generate          # Generate Prisma client from schema
 This is a **pnpm monorepo** with four packages implementing an iPaaS flow orchestration engine (similar to Celigo):
 
 - **`@flow-engine/core`** — The engine. Parses flow definitions into a DAG, resolves step dependencies, executes steps with retry/timeout, stores runtime context in Redis (large payloads offloaded to S3), and persists run history to PostgreSQL via Prisma.
-- **`@flow-engine/api`** — Fastify REST API. Flow CRUD (in-memory store), trigger endpoint that enqueues jobs to BullMQ, run query/cancel endpoints, health check.
+- **`@flow-engine/api`** — Fastify REST API. Flow CRUD (persisted via Prisma), trigger endpoint that enqueues jobs to BullMQ, run query/cancel endpoints, health check.
 - **`@flow-engine/worker`** — BullMQ consumer. Instantiates `FlowEngine` with all dependencies and processes queued flow execution jobs.
-- **`@flow-engine/web`** — React 18 + Vite + Tailwind dashboard. Flow list, flow detail with step table, run history, run detail with step-level logs/output.
+- **`@flow-engine/web`** — React 18 + Vite + Tailwind dashboard. Flow list, create flow (JSON editor), flow detail with step table, trigger button, run history, run detail with step-level logs/output and auto-refresh.
 
 ### Core engine flow
 
@@ -39,7 +47,7 @@ This is a **pnpm monorepo** with four packages implementing an iPaaS flow orches
 
 ### Step executors
 
-Pluggable via `StepExecutorRegistry`. Built-in: `ActionExecutor` (delegates to `ConnectorRegistry`), `TransformExecutor` (resolved inputs = output), `BranchExecutor` (JSONata conditions), `ScriptExecutor` (Node `vm` sandbox, 5s limit).
+Pluggable via `StepExecutorRegistry`. Built-in: `ActionExecutor` (delegates to `ConnectorRegistry`), `TransformExecutor` (resolved inputs = output), `BranchExecutor` (JSONata conditions), `ScriptExecutor` (Node `vm` sandbox, 5s limit), `LoopExecutor` (iterates over JSONPath array), `DelayExecutor` (waits `delayMs`). The worker registers an `HttpConnector` for HTTP action steps.
 
 ### Data flow between packages
 

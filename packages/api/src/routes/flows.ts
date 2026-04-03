@@ -4,32 +4,20 @@ import { DagResolver } from '@flow-engine/core';
 import { CreateFlowSchema, UpdateFlowSchema, TriggerFlowSchema } from '../schemas.js';
 import type { AppDeps } from '../deps.js';
 
-// In-memory store for flow definitions (would be a DB table in production)
-const flowStore = new Map<string, FlowDefinition>();
-let flowCounter = 0;
-
 export async function flowRoutes(app: FastifyInstance, deps: AppDeps): Promise<void> {
   const dagResolver = new DagResolver();
 
-  // List flows (optionally filter by tenantId)
+  // List flows (optionally filter by tenantId or tag)
   app.get('/api/flows', async (request, reply) => {
     const { tenantId, tag } = request.query as { tenantId?: string; tag?: string };
-    let flows = Array.from(flowStore.values());
-
-    if (tenantId) {
-      flows = flows.filter((f) => f.tenantId === tenantId);
-    }
-    if (tag) {
-      flows = flows.filter((f) => f.tags?.includes(tag));
-    }
-
+    const flows = await deps.flowRepository.findAll({ tenantId, tag });
     return reply.send(flows);
   });
 
   // Get flow by ID
   app.get('/api/flows/:flowId', async (request, reply) => {
     const { flowId } = request.params as { flowId: string };
-    const flow = flowStore.get(flowId);
+    const flow = await deps.flowRepository.findById(flowId);
     if (!flow) {
       return reply.status(404).send({ error: 'Flow not found' });
     }
@@ -44,11 +32,10 @@ export async function flowRoutes(app: FastifyInstance, deps: AppDeps): Promise<v
     }
 
     const input = parsed.data;
-    const id = `flow_${++flowCounter}`;
-    const now = new Date();
 
-    const flow: FlowDefinition = {
-      id,
+    // Build a temporary FlowDefinition for DAG validation
+    const tempFlow: FlowDefinition = {
+      id: 'temp',
       version: 1,
       name: input.name,
       description: input.description,
@@ -56,25 +43,24 @@ export async function flowRoutes(app: FastifyInstance, deps: AppDeps): Promise<v
       steps: input.steps,
       errorPolicy: input.errorPolicy,
       tags: input.tags,
-      createdAt: now,
-      updatedAt: now,
+      createdAt: new Date(),
+      updatedAt: new Date(),
     };
 
-    // Validate the DAG
-    const issues = dagResolver.validate(flow);
+    const issues = dagResolver.validate(tempFlow);
     const errors = issues.filter((i: ValidationIssue) => i.severity === 'error');
     if (errors.length > 0) {
       return reply.status(400).send({ error: 'Flow validation failed', details: errors });
     }
 
-    flowStore.set(id, flow);
+    const flow = await deps.flowRepository.create(input);
     return reply.status(201).send(flow);
   });
 
   // Update flow
   app.put('/api/flows/:flowId', async (request, reply) => {
     const { flowId } = request.params as { flowId: string };
-    const existing = flowStore.get(flowId);
+    const existing = await deps.flowRepository.findById(flowId);
     if (!existing) {
       return reply.status(404).send({ error: 'Flow not found' });
     }
@@ -84,38 +70,40 @@ export async function flowRoutes(app: FastifyInstance, deps: AppDeps): Promise<v
       return reply.status(400).send({ error: 'Validation failed', details: parsed.error.issues });
     }
 
-    const updated: FlowDefinition = {
-      ...existing,
-      ...parsed.data,
-      version: existing.version + 1,
-      updatedAt: new Date(),
-    };
-
-    // Validate updated DAG
-    const issues = dagResolver.validate(updated);
-    const errors = issues.filter((i: ValidationIssue) => i.severity === 'error');
-    if (errors.length > 0) {
-      return reply.status(400).send({ error: 'Flow validation failed', details: errors });
+    // Validate updated DAG if steps changed
+    if (parsed.data.steps) {
+      const tempFlow: FlowDefinition = {
+        ...existing,
+        ...parsed.data,
+        version: existing.version + 1,
+        updatedAt: new Date(),
+      };
+      const issues = dagResolver.validate(tempFlow);
+      const errors = issues.filter((i: ValidationIssue) => i.severity === 'error');
+      if (errors.length > 0) {
+        return reply.status(400).send({ error: 'Flow validation failed', details: errors });
+      }
     }
 
-    flowStore.set(flowId, updated);
+    const updated = await deps.flowRepository.update(flowId, parsed.data);
     return reply.send(updated);
   });
 
   // Delete flow
   app.delete('/api/flows/:flowId', async (request, reply) => {
     const { flowId } = request.params as { flowId: string };
-    if (!flowStore.has(flowId)) {
+    const existing = await deps.flowRepository.findById(flowId);
+    if (!existing) {
       return reply.status(404).send({ error: 'Flow not found' });
     }
-    flowStore.delete(flowId);
+    await deps.flowRepository.delete(flowId);
     return reply.status(204).send();
   });
 
   // Trigger flow execution (enqueues a job for the worker)
   app.post('/api/flows/:flowId/trigger', async (request, reply) => {
     const { flowId } = request.params as { flowId: string };
-    const flow = flowStore.get(flowId);
+    const flow = await deps.flowRepository.findById(flowId);
     if (!flow) {
       return reply.status(404).send({ error: 'Flow not found' });
     }
@@ -144,9 +132,4 @@ export async function flowRoutes(app: FastifyInstance, deps: AppDeps): Promise<v
       flowId: flow.id,
     });
   });
-}
-
-// Expose for testing / worker access
-export function getFlowStore(): Map<string, FlowDefinition> {
-  return flowStore;
 }

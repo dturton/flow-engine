@@ -2,6 +2,7 @@ import { Routes, Route, Link } from 'react-router-dom';
 import FlowList from './pages/FlowList.js';
 import FlowDetail from './pages/FlowDetail.js';
 import RunDetail from './pages/RunDetail.js';
+import CreateFlow from './pages/CreateFlow.js';
 
 export default function App() {
   return (
@@ -17,6 +18,7 @@ export default function App() {
       <main className="max-w-7xl mx-auto px-6 py-8">
         <Routes>
           <Route path="/" element={<FlowList />} />
+          <Route path="/flows/new" element={<CreateFlow />} />
           <Route path="/flows/:flowId" element={<FlowDetail />} />
           <Route path="/runs/:runId" element={<RunDetail />} />
         </Routes>

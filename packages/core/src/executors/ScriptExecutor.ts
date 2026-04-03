@@ -29,6 +29,13 @@ export class ScriptExecutor implements StepExecutor {
         error: () => {},
         warn: () => {},
       },
+      // Explicitly block access to Node.js internals
+      require: undefined,
+      process: undefined,
+      fs: undefined,
+      child_process: undefined,
+      global: undefined,
+      globalThis: undefined,
     };
 
     const vmContext = vm.createContext(sandbox);
