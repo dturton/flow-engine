@@ -1,0 +1,15 @@
+{
+  "name": "flow-engine-monorepo",
+  "private": true,
+  "scripts": {
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "dev:api": "pnpm --filter @flow-engine/api dev",
+    "dev:worker": "pnpm --filter @flow-engine/worker dev",
+    "dev:web": "pnpm --filter @flow-engine/web dev",
+    "prisma:generate": "pnpm --filter @flow-engine/core prisma:generate"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
