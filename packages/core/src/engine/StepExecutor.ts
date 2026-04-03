@@ -44,24 +44,24 @@ export class StepExecutorRegistry {
 }
 
 export class InputResolver {
-  resolve(
+  async resolve(
     mapping: StepDefinition['inputMapping'],
     context: FlowContext
-  ): Record<string, unknown> {
+  ): Promise<Record<string, unknown>> {
     const resolved: Record<string, unknown> = {};
 
     for (const [key, expr] of Object.entries(mapping)) {
       if (typeof expr === 'string') {
         resolved[key] = expr;
       } else {
-        resolved[key] = this.evaluateExpression(expr, context);
+        resolved[key] = await this.evaluateExpression(expr, context);
       }
     }
 
     return resolved;
   }
 
-  private evaluateExpression(expr: MappingExpression, context: FlowContext): unknown {
+  private async evaluateExpression(expr: MappingExpression, context: FlowContext): Promise<unknown> {
     const contextObj = {
       trigger: context.trigger,
       steps: context.steps,
@@ -74,8 +74,8 @@ export class InputResolver {
 
       case 'jsonata': {
         const expression = jsonata(expr.value);
-        // jsonata's evaluate is synchronous when no async bindings are used
-        return (expression.evaluate as (data: unknown) => unknown)(contextObj);
+        // jsonata's evaluate is async in v2.x
+        return await expression.evaluate(contextObj);
       }
 
       case 'jsonpath': {

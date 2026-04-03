@@ -22,7 +22,7 @@ export class BranchExecutor implements StepExecutor {
 
     for (const branch of step.branches) {
       const expression = jsonata(branch.when);
-      const result = (expression.evaluate as (data: unknown) => unknown)(contextObj);
+      const result = await expression.evaluate(contextObj);
       if (result === true) {
         const durationMs = Date.now() - startTime;
         return {

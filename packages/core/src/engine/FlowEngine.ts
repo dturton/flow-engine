@@ -91,14 +91,10 @@ export class FlowEngine {
     await this.runRepository.updateStatus(runId, 'running');
 
     if (fromStepId) {
-      // Reset the specified step and all its dependents
+      // Remove the specified step and all its dependents so they can be re-queued
       const dependents = this.getAllDependents(fromStepId, graph);
       for (const stepId of [fromStepId, ...dependents]) {
-        if (run.stepRuns[stepId]) {
-          run.stepRuns[stepId].status = 'pending';
-          run.stepRuns[stepId].error = undefined;
-          run.stepRuns[stepId].output = undefined;
-        }
+        delete run.stepRuns[stepId];
       }
     }
 
@@ -240,7 +236,7 @@ export class FlowEngine {
       try {
         // Re-resolve inputs each attempt (credentials may have refreshed)
         const freshContext = attempt > 1 ? await this.contextStore.get(run.id) : context;
-        const resolvedInputs = this.inputResolver.resolve(step.inputMapping, freshContext);
+        const resolvedInputs = await this.inputResolver.resolve(step.inputMapping, freshContext);
 
         // Execute with timeout
         const executionPromise = this.executorRegistry.execute(step.type, {
