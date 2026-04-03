@@ -14,8 +14,11 @@ import {
   TransformExecutor,
   BranchExecutor,
   ScriptExecutor,
+  LoopExecutor,
+  DelayExecutor,
 } from '@flow-engine/core';
 import type { WorkerConfig } from './config.js';
+import { HttpConnector } from './connectors/http.js';
 
 export interface EngineContext {
   engine: FlowEngine;
@@ -41,10 +44,13 @@ export function createEngineContext(config: WorkerConfig): EngineContext {
   // Set up executor registry with built-in executors
   const executorRegistry = new StepExecutorRegistry();
   const connectorRegistry = new ConnectorRegistry();
+  connectorRegistry.register('http', new HttpConnector());
   executorRegistry.register(new ActionExecutor(connectorRegistry));
   executorRegistry.register(new TransformExecutor());
   executorRegistry.register(new BranchExecutor());
   executorRegistry.register(new ScriptExecutor());
+  executorRegistry.register(new LoopExecutor());
+  executorRegistry.register(new DelayExecutor());
 
   const engine = new FlowEngine(
     dagResolver,

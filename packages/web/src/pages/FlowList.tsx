@@ -21,10 +21,16 @@ export default function FlowList() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">Flows</h1>
+        <Link
+          to="/flows/new"
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
+        >
+          Create Flow
+        </Link>
       </div>
 
       {flows.length === 0 ? (
-        <p className="text-gray-500">No flows yet. Create one via the API.</p>
+        <p className="text-gray-500">No flows yet. Click "Create Flow" to get started.</p>
       ) : (
         <div className="bg-white rounded-lg shadow overflow-hidden">
           <table className="min-w-full divide-y divide-gray-200">

@@ -2,7 +2,7 @@ import { PrismaClient } from '@prisma/client';
 import { Redis } from 'ioredis';
 import { S3Client } from '@aws-sdk/client-s3';
 import { Queue } from 'bullmq';
-import { FlowRunRepository } from '@flow-engine/core';
+import { FlowRunRepository, FlowDefinitionRepository } from '@flow-engine/core';
 import type { AppConfig } from './config.js';
 
 export interface AppDeps {
@@ -11,6 +11,7 @@ export interface AppDeps {
   s3: S3Client;
   flowQueue: Queue;
   runRepository: FlowRunRepository;
+  flowRepository: FlowDefinitionRepository;
 }
 
 export function createDeps(config: AppConfig): AppDeps {
@@ -29,8 +30,9 @@ export function createDeps(config: AppConfig): AppDeps {
   });
 
   const runRepository = new FlowRunRepository(prisma);
+  const flowRepository = new FlowDefinitionRepository(prisma);
 
-  return { prisma, redis, s3, flowQueue, runRepository };
+  return { prisma, redis, s3, flowQueue, runRepository, flowRepository };
 }
 
 export async function closeDeps(deps: AppDeps): Promise<void> {

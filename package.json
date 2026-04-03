@@ -7,7 +7,9 @@
     "dev:api": "pnpm --filter @flow-engine/api dev",
     "dev:worker": "pnpm --filter @flow-engine/worker dev",
     "dev:web": "pnpm --filter @flow-engine/web dev",
-    "prisma:generate": "pnpm --filter @flow-engine/core prisma:generate"
+    "prisma:generate": "pnpm --filter @flow-engine/core prisma:generate",
+    "prisma:push": "pnpm --filter @flow-engine/core exec prisma db push",
+    "seed": "tsx scripts/seed.ts"
   },
   "engines": {
     "node": ">=20"

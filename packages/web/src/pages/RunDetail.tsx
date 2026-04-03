@@ -19,6 +19,19 @@ export default function RunDetail() {
       .finally(() => setLoading(false));
   }, [runId]);
 
+  // Auto-refresh while run is active
+  useEffect(() => {
+    if (!runId || !run) return;
+    if (run.status !== 'running' && run.status !== 'queued') return;
+    const interval = setInterval(async () => {
+      try {
+        const updated = await api.getRun(runId);
+        setRun(updated);
+      } catch { /* ignore polling errors */ }
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [runId, run?.status]);
+
   const handleCancel = async () => {
     if (!runId) return;
     setCancelling(true);
