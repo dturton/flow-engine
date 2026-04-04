@@ -38,8 +38,8 @@ export class ActionExecutor implements StepExecutor {
     const { step, resolvedInputs } = input;
     const startTime = Date.now();
 
-    if (!step.connectorKey) {
-      throw new ConnectorNotFoundError(`Step "${step.id}" has no connectorKey`);
+    if (!step.connectionId && !step.connectorKey) {
+      throw new ConnectorNotFoundError(`Step "${step.id}" has no connectorKey or connectionId`);
     }
 
     let connector: Connector | undefined;
@@ -52,12 +52,16 @@ export class ActionExecutor implements StepExecutor {
         );
       }
       connector = await this.connectionResolver.resolve(step.connectionId);
-    } else {
+    } else if (step.connectorKey) {
       connector = this.connectorRegistry.get(step.connectorKey);
     }
 
     if (!connector) {
-      throw new ConnectorNotFoundError(`Connector not found: "${step.connectorKey}"`);
+      throw new ConnectorNotFoundError(
+        step.connectionId
+          ? `Connection "${step.connectionId}" could not be resolved`
+          : `Connector not found: "${step.connectorKey}"`,
+      );
     }
 
     const output = await connector.execute(step.operationId ?? 'default', resolvedInputs);

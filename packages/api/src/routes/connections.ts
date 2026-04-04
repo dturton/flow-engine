@@ -10,7 +10,7 @@ export async function connectionRoutes(app: FastifyInstance, deps: AppDeps): Pro
       return reply.status(400).send({ error: 'tenantId query parameter is required' });
     }
     const connections = await deps.connectionRepository.findByTenant(tenantId, connectorKey);
-    return reply.send(connections);
+    return reply.send(connections.map((c) => ({ ...c, credentials: maskCredentials(c.credentials) })));
   });
 
   // Get connection by ID
@@ -42,7 +42,7 @@ export async function connectionRoutes(app: FastifyInstance, deps: AppDeps): Pro
       credentials: parsed.data.credentials,
       config: parsed.data.config ?? {},
     });
-    return reply.status(201).send(connection);
+    return reply.status(201).send({ ...connection, credentials: maskCredentials(connection.credentials) });
   });
 
   // Update connection
@@ -59,7 +59,7 @@ export async function connectionRoutes(app: FastifyInstance, deps: AppDeps): Pro
     }
 
     const updated = await deps.connectionRepository.update(connectionId, parsed.data);
-    return reply.send(updated);
+    return reply.send({ ...updated, credentials: maskCredentials(updated.credentials) });
   });
 
   // Delete connection
