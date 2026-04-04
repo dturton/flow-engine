@@ -4,6 +4,7 @@ import { registerProductOperations } from './operations/products.js';
 import { registerOrderOperations } from './operations/orders.js';
 import { registerCustomerOperations } from './operations/customers.js';
 import { registerInventoryOperations } from './operations/inventory.js';
+import { registerMetafieldOperations } from './operations/metafields.js';
 
 export interface ShopifyConfig {
   /** e.g. "my-store.myshopify.com" */
@@ -36,5 +37,6 @@ export class ShopifyConnector extends BaseConnector {
     registerOrderOperations(this.operations, graphql);
     registerCustomerOperations(this.operations, graphql);
     registerInventoryOperations(this.operations, graphql);
+    registerMetafieldOperations(this.operations, graphql);
   }
 }

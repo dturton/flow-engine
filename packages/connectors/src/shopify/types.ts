@@ -12,6 +12,18 @@ export interface ShopifyMoneyV2 {
   currencyCode: string;
 }
 
+export interface ShopifyMetafield {
+  id: string;
+  namespace: string;
+  key: string;
+  value: string;
+  type: string;
+  description: string | null;
+  ownerType: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ShopifyProduct {
   id: string;
   title: string;
@@ -38,6 +50,7 @@ export interface ShopifyProduct {
   };
   featuredImage: ShopifyImage | null;
   seo: { title: string | null; description: string | null };
+  metafields: ShopifyConnection<ShopifyMetafield>;
   variants: ShopifyConnection<ShopifyVariant>;
   images: ShopifyConnection<ShopifyImage>;
   collections: ShopifyConnection<{ id: string; title: string }>;
@@ -73,6 +86,7 @@ export interface ShopifyVariant {
   position: number;
   selectedOptions: { name: string; value: string }[];
   image: ShopifyImage | null;
+  metafields: ShopifyConnection<ShopifyMetafield>;
   createdAt: string;
   updatedAt: string;
 }

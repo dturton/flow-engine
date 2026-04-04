@@ -49,6 +49,21 @@ const PRODUCT_FRAGMENT = `
       height
     }
     seo { title description }
+    metafields(first: 50) {
+      edges {
+        node {
+          id
+          namespace
+          key
+          value
+          type
+          description
+          ownerType
+          createdAt
+          updatedAt
+        }
+      }
+    }
     variants(first: 100) {
       edges {
         node {
@@ -71,6 +86,21 @@ const PRODUCT_FRAGMENT = `
           position
           selectedOptions { name value }
           image { id url altText width height }
+          metafields(first: 25) {
+            edges {
+              node {
+                id
+                namespace
+                key
+                value
+                type
+                description
+                ownerType
+                createdAt
+                updatedAt
+              }
+            }
+          }
           createdAt
           updatedAt
         }
