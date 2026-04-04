@@ -45,6 +45,22 @@ importers:
         specifier: ^5.4.5
         version: 5.9.3
 
+  packages/connectors:
+    dependencies:
+      '@flow-engine/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      '@types/node':
+        specifier: ^20.14.0
+        version: 20.19.39
+      typescript:
+        specifier: ^5.4.5
+        version: 5.9.3
+      vitest:
+        specifier: ^1.6.0
+        version: 1.6.1(@types/node@20.19.39)
+
   packages/core:
     dependencies:
       '@aws-sdk/client-s3':
@@ -127,6 +143,9 @@ importers:
       '@aws-sdk/client-s3':
         specifier: ^3.600.0
         version: 3.1023.0
+      '@flow-engine/connectors':
+        specifier: workspace:*
+        version: link:../connectors
       '@flow-engine/core':
         specifier: workspace:*
         version: link:../core

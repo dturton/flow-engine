@@ -9,6 +9,7 @@ export interface StepExecutionInput {
   resolvedInputs: Record<string, unknown>;
   context: FlowContext;
   attempt: number;
+  tenantId: string;
 }
 
 export interface StepExecutionResult {

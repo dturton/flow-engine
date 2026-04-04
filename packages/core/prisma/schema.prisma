@@ -23,6 +23,21 @@ model FlowDefinition {
   @@unique([id, version])
 }
 
+model Connection {
+  id            String    @id @default(cuid())
+  tenantId      String
+  connectorKey  String
+  name          String
+  description   String?
+  credentials   Json
+  config        Json      @default("{}")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([tenantId])
+  @@index([tenantId, connectorKey])
+}
+
 model FlowRun {
   id          String    @id @default(cuid())
   flowId      String

@@ -23,6 +23,7 @@ const StepDefinitionSchema = z.object({
   name: z.string().min(1),
   type: z.enum(['action', 'transform', 'branch', 'loop', 'delay', 'script']),
   connectorKey: z.string().optional(),
+  connectionId: z.string().optional(),
   operationId: z.string().optional(),
   inputMapping: z.record(z.union([MappingExpressionSchema, z.string()])),
   outputMapping: z.record(z.string()).optional(),
@@ -55,6 +56,24 @@ export const TriggerFlowSchema = z.object({
   data: z.record(z.unknown()),
 });
 
+export const CreateConnectionSchema = z.object({
+  tenantId: z.string().min(1),
+  connectorKey: z.string().min(1),
+  name: z.string().min(1),
+  description: z.string().optional(),
+  credentials: z.record(z.unknown()),
+  config: z.record(z.unknown()).optional(),
+});
+
+export const UpdateConnectionSchema = z.object({
+  name: z.string().min(1).optional(),
+  description: z.string().optional(),
+  credentials: z.record(z.unknown()).optional(),
+  config: z.record(z.unknown()).optional(),
+});
+
+export type CreateConnectionInput = z.infer<typeof CreateConnectionSchema>;
+export type UpdateConnectionInput = z.infer<typeof UpdateConnectionSchema>;
 export type CreateFlowInput = z.infer<typeof CreateFlowSchema>;
 export type UpdateFlowInput = z.infer<typeof UpdateFlowSchema>;
 export type TriggerFlowInput = z.infer<typeof TriggerFlowSchema>;
