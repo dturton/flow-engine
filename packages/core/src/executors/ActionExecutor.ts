@@ -18,22 +18,45 @@ export class ConnectorRegistry {
   }
 }
 
+/**
+ * Resolves a Connector for a given connectionId.
+ * Implemented outside core (e.g., in the worker) to avoid circular deps.
+ */
+export interface ConnectionResolver {
+  resolve(connectionId: string): Promise<Connector>;
+}
+
 export class ActionExecutor implements StepExecutor {
   readonly type: StepType = 'action';
 
-  constructor(private connectorRegistry: ConnectorRegistry) {}
+  constructor(
+    private connectorRegistry: ConnectorRegistry,
+    private connectionResolver?: ConnectionResolver,
+  ) {}
 
   async execute(input: StepExecutionInput): Promise<StepExecutionResult> {
     const { step, resolvedInputs } = input;
     const startTime = Date.now();
 
-    if (!step.connectorKey) {
-      throw new ConnectorNotFoundError(`Step "${step.id}" has no connectorKey`);
+    if (!step.connectionId && !step.connectorKey) {
+      throw new ConnectorNotFoundError(`Step "${step.id}" has no connectorKey or connectionId`);
     }
 
-    const connector = this.connectorRegistry.get(step.connectorKey);
+    let connector: Connector | undefined;
+
+    // If step has a connectionId, resolve dynamically from stored credentials
+    if (step.connectionId && this.connectionResolver) {
+      connector = await this.connectionResolver.resolve(step.connectionId);
+    } else if (step.connectorKey) {
+      connector = this.connectorRegistry.get(step.connectorKey);
+    }
+
     if (!connector) {
-      throw new ConnectorNotFoundError(`Connector not found: "${step.connectorKey}"`);
+      throw new ConnectorNotFoundError(
+        step.connectionId
+          ? `Connection "${step.connectionId}" could not be resolved`
+          : `Connector not found: "${step.connectorKey}"`,
+      );
     }
 
     const output = await connector.execute(step.operationId ?? 'default', resolvedInputs);

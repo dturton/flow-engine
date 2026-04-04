@@ -1,11 +1,11 @@
 import type { Connector } from '@flow-engine/core';
 
 export class HttpConnector implements Connector {
-  async execute(operationId: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
+  async execute(_operationId: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
     const url = inputs.url as string;
     if (!url) throw new Error('HttpConnector requires a "url" input');
 
-    const method = (inputs.method as string ?? 'GET').toUpperCase();
+    const method = ((inputs.method as string) ?? 'GET').toUpperCase();
     const headers = (inputs.headers as Record<string, string>) ?? {};
     const body = inputs.body;
 

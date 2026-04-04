@@ -34,10 +34,11 @@ pnpm seed                     # Create example flows via the API (requires API r
 
 ## Architecture
 
-This is a **pnpm monorepo** with four packages implementing an iPaaS flow orchestration engine (similar to Celigo):
+This is a **pnpm monorepo** with five packages implementing an iPaaS flow orchestration engine (similar to Celigo):
 
 - **`@flow-engine/core`** — The engine. Parses flow definitions into a DAG, resolves step dependencies, executes steps with retry/timeout, stores runtime context in Redis (large payloads offloaded to S3), and persists run history to PostgreSQL via Prisma.
 - **`@flow-engine/api`** — Fastify REST API. Flow CRUD (persisted via Prisma), trigger endpoint that enqueues jobs to BullMQ, run query/cancel endpoints, health check.
+- **`@flow-engine/connectors`** — Connector library. `BaseConnector` abstract class with operation dispatch, `AuthenticatedHttpClient`, `RateLimiter`, error classification. Ships `HttpConnector` (generic fetch) and `ShopifyConnector` (REST Admin API: products, orders, customers, inventory).
 - **`@flow-engine/worker`** — BullMQ consumer. Instantiates `FlowEngine` with all dependencies and processes queued flow execution jobs.
 - **`@flow-engine/web`** — React 18 + Vite + Tailwind dashboard. Flow list, create flow (JSON editor), flow detail with step table, trigger button, run history, run detail with step-level logs/output and auto-refresh.
 
@@ -47,7 +48,7 @@ This is a **pnpm monorepo** with four packages implementing an iPaaS flow orches
 
 ### Step executors
 
-Pluggable via `StepExecutorRegistry`. Built-in: `ActionExecutor` (delegates to `ConnectorRegistry`), `TransformExecutor` (resolved inputs = output), `BranchExecutor` (JSONata conditions), `ScriptExecutor` (Node `vm` sandbox, 5s limit), `LoopExecutor` (iterates over JSONPath array), `DelayExecutor` (waits `delayMs`). The worker registers an `HttpConnector` for HTTP action steps.
+Pluggable via `StepExecutorRegistry`. Built-in: `ActionExecutor` (delegates to `ConnectorRegistry`), `TransformExecutor` (resolved inputs = output), `BranchExecutor` (JSONata conditions), `ScriptExecutor` (Node `vm` sandbox, 5s limit), `LoopExecutor` (iterates over JSONPath array), `DelayExecutor` (waits `delayMs`). Connectors live in `@flow-engine/connectors` — new connectors extend `BaseConnector` and register operation handlers (e.g., `products.list`, `orders.create`). The worker registers `HttpConnector` and conditionally `ShopifyConnector`.
 
 ### Data flow between packages
 
