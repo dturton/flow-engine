@@ -57,23 +57,36 @@ export function createEngineContext(config: WorkerConfig): EngineContext {
   });
   connectorFactory.registerBuilder('http', (_conn: Connection) => new HttpConnector());
 
-  // Connector cache: keyed by connectionId so each connection shares one instance
-  // (and therefore one RateLimiter) across concurrent steps.
-  const connectorCache = new Map<string, Connector>();
+  // Connector cache: keyed by connectionId so concurrent steps share one instance
+  // (and therefore one RateLimiter). Entries expire after CACHE_TTL_MS so that
+  // credential rotations and config changes propagate without a worker restart.
+  const CACHE_TTL_MS = 60_000;
+  const connectorCache = new Map<string, { promise: Promise<Connector>; expiresAt: number }>();
 
-  // Connection resolver: loads a Connection from DB and creates a Connector via the factory
+  // Connection resolver: loads a Connection from DB and creates a Connector via the factory.
+  // Caches the in-flight Promise so concurrent resolve() calls for the same connectionId
+  // coalesce into a single DB read + factory call.
   const connectionResolver: ConnectionResolver = {
     async resolve(connectionId: string): Promise<Connector> {
       const cached = connectorCache.get(connectionId);
-      if (cached) return cached;
-
-      const connection = await connectionRepository.findById(connectionId);
-      if (!connection) {
-        throw new Error(`Connection not found: "${connectionId}"`);
+      if (cached && cached.expiresAt > Date.now()) {
+        return cached.promise;
       }
-      const connector = connectorFactory.create(connection);
-      connectorCache.set(connectionId, connector);
-      return connector;
+
+      const promise = (async () => {
+        const connection = await connectionRepository.findById(connectionId);
+        if (!connection) {
+          throw new Error(`Connection not found: "${connectionId}"`);
+        }
+        return connectorFactory.create(connection);
+      })();
+
+      connectorCache.set(connectionId, { promise, expiresAt: Date.now() + CACHE_TTL_MS });
+
+      // If the resolution fails, evict so the next call retries
+      promise.catch(() => connectorCache.delete(connectionId));
+
+      return promise;
     },
   };
 

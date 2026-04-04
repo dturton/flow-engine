@@ -29,7 +29,7 @@ function encryptCredentials(creds: Record<string, unknown>): Prisma.InputJsonVal
   const encrypted = Buffer.concat([cipher.update(text, 'utf8'), cipher.final()]);
   const tag = cipher.getAuthTag();
   const payload = `${iv.toString('hex')}:${tag.toString('hex')}:${encrypted.toString('hex')}`;
-  return { _enc: payload } as Prisma.InputJsonValue;
+  return { __flow_enc_v1: payload } as Prisma.InputJsonValue;
 }
 
 function decryptCredentials(value: Prisma.JsonValue): Record<string, unknown> {
@@ -37,8 +37,8 @@ function decryptCredentials(value: Prisma.JsonValue): Record<string, unknown> {
     value !== null &&
     typeof value === 'object' &&
     !Array.isArray(value) &&
-    '_enc' in value &&
-    typeof (value as Record<string, unknown>)['_enc'] === 'string'
+    '__flow_enc_v1' in value &&
+    typeof (value as Record<string, unknown>)['__flow_enc_v1'] === 'string'
   ) {
     const key = getEncryptionKey();
     if (!key) {
@@ -46,7 +46,7 @@ function decryptCredentials(value: Prisma.JsonValue): Record<string, unknown> {
         'Encrypted credentials found in database but CREDENTIALS_ENCRYPTION_KEY is not set',
       );
     }
-    const payload = (value as { _enc: string })._enc;
+    const payload = (value as { __flow_enc_v1: string }).__flow_enc_v1;
     const parts = payload.split(':');
     if (parts.length !== 3) {
       throw new Error('Malformed encrypted credentials payload');

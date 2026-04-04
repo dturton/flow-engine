@@ -198,7 +198,7 @@ describe('ConnectionRepository — with encryption key', () => {
 
     // Credentials passed to Prisma must be the encrypted envelope, not plaintext
     expect(storedCredentials).not.toEqual(plaintext);
-    expect(storedCredentials).toHaveProperty('_enc');
+    expect(storedCredentials).toHaveProperty('__flow_enc_v1');
   });
 
   it('findById decrypts encrypted credentials transparently', async () => {
@@ -243,13 +243,13 @@ describe('ConnectionRepository — with encryption key', () => {
 
     await repo.update('conn-1', { credentials: { accessToken: 'new_secret' } });
 
-    expect(storedCredentials).toHaveProperty('_enc');
+    expect(storedCredentials).toHaveProperty('__flow_enc_v1');
     expect(storedCredentials).not.toEqual({ accessToken: 'new_secret' });
   });
 
   it('throws when encrypted credentials are found but the key is missing', async () => {
     const encryptedRow = makePrismaRow({
-      credentials: { _enc: 'fake:deadbeef:deadbeef' },
+      credentials: { __flow_enc_v1: 'fake:deadbeef:deadbeef' },
     });
     const prisma = makeMockPrisma({
       connection: { findUnique: vi.fn().mockResolvedValue(encryptedRow) },
@@ -265,7 +265,7 @@ describe('ConnectionRepository — with encryption key', () => {
   });
 
   it('rejects a malformed encrypted payload', async () => {
-    const malformedRow = makePrismaRow({ credentials: { _enc: 'onlytwoparts:here' } });
+    const malformedRow = makePrismaRow({ credentials: { __flow_enc_v1: 'onlytwoparts:here' } });
     const prisma = makeMockPrisma({
       connection: { findUnique: vi.fn().mockResolvedValue(malformedRow) },
     });
