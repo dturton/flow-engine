@@ -15,22 +15,64 @@ const PRODUCT_FRAGMENT = `
   fragment ProductFields on Product {
     id
     title
+    description
     descriptionHtml
     vendor
     productType
     handle
     status
     tags
+    templateSuffix
+    isGiftCard
+    hasOnlyDefaultVariant
+    hasOutOfStockVariants
+    tracksInventory
+    totalInventory
+    totalVariants
+    onlineStoreUrl
+    onlineStorePreviewUrl
+    options {
+      id
+      name
+      position
+      values
+    }
+    priceRangeV2 {
+      minVariantPrice { amount currencyCode }
+      maxVariantPrice { amount currencyCode }
+    }
+    featuredImage {
+      id
+      url
+      altText
+      width
+      height
+    }
+    seo { title description }
     variants(first: 100) {
       edges {
         node {
           id
           title
+          displayName
           price
+          compareAtPrice
           sku
+          barcode
+          availableForSale
           inventoryQuantity
+          inventoryPolicy
+          inventoryItem { id tracked }
           weight
           weightUnit
+          requiresShipping
+          taxable
+          taxCode
+          position
+          selectedOptions { name value }
+          image { id url altText width height }
+          createdAt
+          updatedAt
         }
       }
     }
@@ -40,6 +82,16 @@ const PRODUCT_FRAGMENT = `
           id
           url
           altText
+          width
+          height
+        }
+      }
+    }
+    collections(first: 25) {
+      edges {
+        node {
+          id
+          title
         }
       }
     }

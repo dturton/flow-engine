@@ -7,36 +7,82 @@ export interface ShopifyConnection<T> {
   };
 }
 
+export interface ShopifyMoneyV2 {
+  amount: string;
+  currencyCode: string;
+}
+
 export interface ShopifyProduct {
   id: string;
   title: string;
-  descriptionHtml: string | null;
+  description: string;
+  descriptionHtml: string;
   vendor: string;
   productType: string;
   handle: string;
   status: 'ACTIVE' | 'ARCHIVED' | 'DRAFT';
   tags: string[];
+  templateSuffix: string | null;
+  isGiftCard: boolean;
+  hasOnlyDefaultVariant: boolean;
+  hasOutOfStockVariants: boolean;
+  tracksInventory: boolean;
+  totalInventory: number;
+  totalVariants: number;
+  onlineStoreUrl: string | null;
+  onlineStorePreviewUrl: string | null;
+  options: ShopifyProductOption[];
+  priceRangeV2: {
+    minVariantPrice: ShopifyMoneyV2;
+    maxVariantPrice: ShopifyMoneyV2;
+  };
+  featuredImage: ShopifyImage | null;
+  seo: { title: string | null; description: string | null };
   variants: ShopifyConnection<ShopifyVariant>;
   images: ShopifyConnection<ShopifyImage>;
+  collections: ShopifyConnection<{ id: string; title: string }>;
   createdAt: string;
   updatedAt: string;
   publishedAt: string | null;
 }
 
+export interface ShopifyProductOption {
+  id: string;
+  name: string;
+  position: number;
+  values: string[];
+}
+
 export interface ShopifyVariant {
   id: string;
   title: string;
+  displayName: string;
   price: string;
+  compareAtPrice: string | null;
   sku: string | null;
+  barcode: string | null;
+  availableForSale: boolean;
   inventoryQuantity: number;
+  inventoryPolicy: 'DENY' | 'CONTINUE';
+  inventoryItem: { id: string; tracked: boolean };
   weight: number | null;
-  weightUnit: string;
+  weightUnit: 'GRAMS' | 'KILOGRAMS' | 'OUNCES' | 'POUNDS';
+  requiresShipping: boolean;
+  taxable: boolean;
+  taxCode: string | null;
+  position: number;
+  selectedOptions: { name: string; value: string }[];
+  image: ShopifyImage | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface ShopifyImage {
   id: string;
   url: string;
   altText: string | null;
+  width: number | null;
+  height: number | null;
 }
 
 export interface ShopifyOrder {
