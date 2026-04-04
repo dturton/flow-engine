@@ -8,8 +8,10 @@ export type { StepExecutor, StepExecutionInput, StepExecutionResult } from './en
 export { RetryManager } from './engine/RetryManager.js';
 export { FlowRunRepository } from './persistence/FlowRunRepository.js';
 export { FlowDefinitionRepository } from './persistence/FlowDefinitionRepository.js';
+export { ConnectionRepository } from './persistence/ConnectionRepository.js';
+export type { Connection } from './persistence/ConnectionRepository.js';
 export { ActionExecutor, ConnectorRegistry } from './executors/ActionExecutor.js';
-export type { Connector } from './executors/ActionExecutor.js';
+export type { Connector, ConnectionResolver } from './executors/ActionExecutor.js';
 export { TransformExecutor } from './executors/TransformExecutor.js';
 export { BranchExecutor } from './executors/BranchExecutor.js';
 export { ScriptExecutor } from './executors/ScriptExecutor.js';

@@ -4,6 +4,7 @@ import type { AppConfig } from './config.js';
 import type { AppDeps } from './deps.js';
 import { flowRoutes } from './routes/flows.js';
 import { runRoutes } from './routes/runs.js';
+import { connectionRoutes } from './routes/connections.js';
 import { healthRoutes } from './routes/health.js';
 
 export async function buildApp(config: AppConfig, deps: AppDeps) {
@@ -28,6 +29,7 @@ export async function buildApp(config: AppConfig, deps: AppDeps) {
   // Register routes
   await flowRoutes(app, deps);
   await runRoutes(app, deps);
+  await connectionRoutes(app, deps);
   await healthRoutes(app, deps);
 
   return app;

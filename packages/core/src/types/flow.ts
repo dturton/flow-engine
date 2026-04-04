@@ -23,6 +23,7 @@ export interface StepDefinition {
   name: string;
   type: StepType;
   connectorKey?: string;
+  connectionId?: string;
   operationId?: string;
   inputMapping: Record<string, MappingExpression | string>;
   outputMapping?: Record<string, string>;

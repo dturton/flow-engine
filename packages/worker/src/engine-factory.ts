@@ -9,6 +9,7 @@ import {
   InputResolver,
   RetryManager,
   FlowRunRepository,
+  ConnectionRepository,
   ActionExecutor,
   ConnectorRegistry,
   TransformExecutor,
@@ -17,8 +18,10 @@ import {
   LoopExecutor,
   DelayExecutor,
 } from '@flow-engine/core';
+import type { Connector, ConnectionResolver } from '@flow-engine/core';
 import type { WorkerConfig } from './config.js';
-import { HttpConnector } from './connectors/http.js';
+import { HttpConnector, ShopifyConnector, ConnectorFactory } from '@flow-engine/connectors';
+import type { Connection } from '@flow-engine/core';
 
 export interface EngineContext {
   engine: FlowEngine;
@@ -40,12 +43,45 @@ export function createEngineContext(config: WorkerConfig): EngineContext {
   const inputResolver = new InputResolver();
   const retryManager = new RetryManager();
   const runRepository = new FlowRunRepository(prisma);
+  const connectionRepository = new ConnectionRepository(prisma);
+
+  // Connector factory: creates connector instances from stored Connection records
+  const connectorFactory = new ConnectorFactory();
+  connectorFactory.registerBuilder('shopify', (conn: Connection) => {
+    return new ShopifyConnector({
+      storeUrl: conn.credentials.storeUrl as string,
+      accessToken: conn.credentials.accessToken as string,
+      apiVersion: conn.config.apiVersion as string | undefined,
+      rateLimitPerSecond: conn.config.rateLimitPerSecond as number | undefined,
+    });
+  });
+  connectorFactory.registerBuilder('http', (_conn: Connection) => new HttpConnector());
+
+  // Connector cache: keyed by connectionId so each connection shares one instance
+  // (and therefore one RateLimiter) across concurrent steps.
+  const connectorCache = new Map<string, Connector>();
+
+  // Connection resolver: loads a Connection from DB and creates a Connector via the factory
+  const connectionResolver: ConnectionResolver = {
+    async resolve(connectionId: string): Promise<Connector> {
+      const cached = connectorCache.get(connectionId);
+      if (cached) return cached;
+
+      const connection = await connectionRepository.findById(connectionId);
+      if (!connection) {
+        throw new Error(`Connection not found: "${connectionId}"`);
+      }
+      const connector = connectorFactory.create(connection);
+      connectorCache.set(connectionId, connector);
+      return connector;
+    },
+  };
 
   // Set up executor registry with built-in executors
   const executorRegistry = new StepExecutorRegistry();
   const connectorRegistry = new ConnectorRegistry();
   connectorRegistry.register('http', new HttpConnector());
-  executorRegistry.register(new ActionExecutor(connectorRegistry));
+  executorRegistry.register(new ActionExecutor(connectorRegistry, connectionResolver));
   executorRegistry.register(new TransformExecutor());
   executorRegistry.register(new BranchExecutor());
   executorRegistry.register(new ScriptExecutor());

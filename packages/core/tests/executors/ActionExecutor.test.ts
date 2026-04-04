@@ -1,5 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
-import { ActionExecutor, ConnectorRegistry } from '../../src/executors/ActionExecutor.js';
+import {
+  ActionExecutor,
+  ConnectorRegistry,
+  type ConnectionResolver,
+} from '../../src/executors/ActionExecutor.js';
 import { ConnectorNotFoundError } from '../../src/errors.js';
 import type { Connector } from '../../src/executors/ActionExecutor.js';
 import type { StepExecutionInput } from '../../src/engine/StepExecutor.js';
@@ -167,5 +171,92 @@ describe('ActionExecutor', () => {
     await expect(
       executor.execute(makeInput({ step: makeStep({ connectorKey: 'svc' }) }))
     ).rejects.toThrow('network failure');
+  });
+});
+
+describe('ActionExecutor — connectionId resolution', () => {
+  it('resolves the connector via connectionResolver when step has a connectionId', async () => {
+    const registry = new ConnectorRegistry();
+    const dynamicConnector: Connector = {
+      execute: vi.fn().mockResolvedValue({ result: 'ok' }),
+    };
+    const resolver: ConnectionResolver = {
+      resolve: vi.fn().mockResolvedValue(dynamicConnector),
+    };
+
+    const executor = new ActionExecutor(registry, resolver);
+    const input = makeInput({
+      step: makeStep({ connectorKey: 'shopify', connectionId: 'conn-1', operationId: 'listProducts' }),
+    });
+
+    const result = await executor.execute(input);
+
+    expect(resolver.resolve).toHaveBeenCalledWith('conn-1');
+    expect(dynamicConnector.execute).toHaveBeenCalledWith('listProducts', expect.anything());
+    expect(result.output).toEqual({ result: 'ok' });
+  });
+
+  it('prefers connectionId over connectorRegistry when both are available', async () => {
+    const registryConnector: Connector = { execute: vi.fn().mockResolvedValue({ from: 'registry' }) };
+    const dynamicConnector: Connector = { execute: vi.fn().mockResolvedValue({ from: 'resolver' }) };
+
+    const registry = new ConnectorRegistry();
+    registry.register('shopify', registryConnector);
+
+    const resolver: ConnectionResolver = {
+      resolve: vi.fn().mockResolvedValue(dynamicConnector),
+    };
+
+    const executor = new ActionExecutor(registry, resolver);
+    const result = await executor.execute(
+      makeInput({ step: makeStep({ connectorKey: 'shopify', connectionId: 'conn-1' }) }),
+    );
+
+    expect(registryConnector.execute).not.toHaveBeenCalled();
+    expect(result.output).toEqual({ from: 'resolver' });
+  });
+
+  it('throws ConnectorNotFoundError when connectionId is set but no resolver is configured', async () => {
+    const registry = new ConnectorRegistry();
+    const executor = new ActionExecutor(registry); // no resolver
+
+    const input = makeInput({
+      step: makeStep({ connectorKey: 'shopify', connectionId: 'conn-1' }),
+    });
+
+    await expect(executor.execute(input)).rejects.toThrow(ConnectorNotFoundError);
+    await expect(executor.execute(input)).rejects.toThrow(
+      'no ConnectionResolver is configured',
+    );
+  });
+
+  it('propagates errors thrown by the connectionResolver', async () => {
+    const registry = new ConnectorRegistry();
+    const resolver: ConnectionResolver = {
+      resolve: vi.fn().mockRejectedValue(new Error('Connection not found: "conn-99"')),
+    };
+
+    const executor = new ActionExecutor(registry, resolver);
+    const input = makeInput({
+      step: makeStep({ connectorKey: 'shopify', connectionId: 'conn-99' }),
+    });
+
+    await expect(executor.execute(input)).rejects.toThrow('Connection not found: "conn-99"');
+  });
+
+  it('does not use connectionResolver when connectionId is absent', async () => {
+    const registry = new ConnectorRegistry();
+    const connector: Connector = { execute: vi.fn().mockResolvedValue({}) };
+    registry.register('http', connector);
+
+    const resolver: ConnectionResolver = { resolve: vi.fn() };
+    const executor = new ActionExecutor(registry, resolver);
+
+    await executor.execute(
+      makeInput({ step: makeStep({ connectorKey: 'http' }) }),
+    );
+
+    expect(resolver.resolve).not.toHaveBeenCalled();
+    expect(connector.execute).toHaveBeenCalledOnce();
   });
 });

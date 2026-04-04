@@ -244,6 +244,7 @@ export class FlowEngine {
           resolvedInputs,
           context: freshContext,
           attempt,
+          tenantId: run.tenantId,
         });
 
         const timeoutPromise = new Promise<never>((_resolve, reject) => {
