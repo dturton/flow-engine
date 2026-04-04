@@ -1,78 +1,92 @@
+/** GraphQL connection shape returned by Shopify list queries. */
+export interface ShopifyConnection<T> {
+  edges: { node: T }[];
+  pageInfo: {
+    hasNextPage: boolean;
+    endCursor: string | null;
+  };
+}
+
 export interface ShopifyProduct {
-  id: number;
+  id: string;
   title: string;
-  body_html: string | null;
+  descriptionHtml: string | null;
   vendor: string;
-  product_type: string;
+  productType: string;
   handle: string;
-  status: 'active' | 'archived' | 'draft';
-  tags: string;
-  variants: ShopifyVariant[];
-  images: ShopifyImage[];
-  created_at: string;
-  updated_at: string;
-  published_at: string | null;
+  status: 'ACTIVE' | 'ARCHIVED' | 'DRAFT';
+  tags: string[];
+  variants: ShopifyConnection<ShopifyVariant>;
+  images: ShopifyConnection<ShopifyImage>;
+  createdAt: string;
+  updatedAt: string;
+  publishedAt: string | null;
 }
 
 export interface ShopifyVariant {
-  id: number;
-  product_id: number;
+  id: string;
   title: string;
   price: string;
   sku: string | null;
-  inventory_quantity: number;
-  weight: number;
-  weight_unit: string;
+  inventoryQuantity: number;
+  weight: number | null;
+  weightUnit: string;
 }
 
 export interface ShopifyImage {
-  id: number;
-  product_id: number;
-  src: string;
-  alt: string | null;
-  position: number;
+  id: string;
+  url: string;
+  altText: string | null;
 }
 
 export interface ShopifyOrder {
-  id: number;
+  id: string;
   name: string;
   email: string | null;
-  financial_status: string;
-  fulfillment_status: string | null;
-  total_price: string;
-  currency: string;
-  line_items: ShopifyLineItem[];
+  displayFinancialStatus: string | null;
+  displayFulfillmentStatus: string | null;
+  totalPriceSet: { shopMoney: { amount: string; currencyCode: string } };
+  lineItems: ShopifyConnection<ShopifyLineItem>;
   customer: ShopifyCustomer | null;
-  created_at: string;
-  updated_at: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface ShopifyLineItem {
-  id: number;
-  product_id: number | null;
-  variant_id: number | null;
+  id: string;
   title: string;
   quantity: number;
-  price: string;
+  originalUnitPriceSet: { shopMoney: { amount: string; currencyCode: string } };
   sku: string | null;
+  product: { id: string } | null;
+  variant: { id: string } | null;
 }
 
 export interface ShopifyCustomer {
-  id: number;
+  id: string;
   email: string | null;
-  first_name: string | null;
-  last_name: string | null;
+  firstName: string | null;
+  lastName: string | null;
   phone: string | null;
-  orders_count: number;
-  total_spent: string;
-  tags: string;
-  created_at: string;
-  updated_at: string;
+  numberOfOrders: string;
+  amountSpent: { amount: string; currencyCode: string };
+  tags: string[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface ShopifyInventoryLevel {
-  inventory_item_id: number;
-  location_id: number;
-  available: number | null;
-  updated_at: string;
+  id: string;
+  quantities: { name: string; quantity: number }[];
+  item: { id: string };
+  location: { id: string };
+  updatedAt: string;
+}
+
+export interface ShopifyDraftOrder {
+  id: string;
+  name: string;
+  order: { id: string } | null;
+  createdAt: string;
+  updatedAt: string;
 }

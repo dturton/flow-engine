@@ -1,4 +1,5 @@
 import { BaseConnector } from '../base/BaseConnector.js';
+import { ShopifyGraphQLClient } from './graphql-client.js';
 import { registerProductOperations } from './operations/products.js';
 import { registerOrderOperations } from './operations/orders.js';
 import { registerCustomerOperations } from './operations/customers.js';
@@ -8,7 +9,7 @@ export interface ShopifyConfig {
   /** e.g. "my-store.myshopify.com" */
   storeUrl: string;
   accessToken: string;
-  /** Shopify API version, defaults to "2024-10" */
+  /** Shopify API version, defaults to "2025-01" */
   apiVersion?: string;
   /** Requests per second, defaults to 2 (Shopify standard limit) */
   rateLimitPerSecond?: number;
@@ -16,7 +17,7 @@ export interface ShopifyConfig {
 
 export class ShopifyConnector extends BaseConnector {
   constructor(config: ShopifyConfig) {
-    const apiVersion = config.apiVersion ?? '2024-10';
+    const apiVersion = config.apiVersion ?? '2025-01';
     const store = config.storeUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
     super({
       baseUrl: `https://${store}/admin/api/${apiVersion}`,
@@ -30,9 +31,10 @@ export class ShopifyConnector extends BaseConnector {
   }
 
   protected registerOperations(): void {
-    registerProductOperations(this.operations, this.http);
-    registerOrderOperations(this.operations, this.http);
-    registerCustomerOperations(this.operations, this.http);
-    registerInventoryOperations(this.operations, this.http);
+    const graphql = new ShopifyGraphQLClient(this.http);
+    registerProductOperations(this.operations, graphql);
+    registerOrderOperations(this.operations, graphql);
+    registerCustomerOperations(this.operations, graphql);
+    registerInventoryOperations(this.operations, graphql);
   }
 }

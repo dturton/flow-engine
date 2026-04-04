@@ -1,56 +1,91 @@
 import type { PageInfo } from '../../base/types.js';
+import type { UserError } from '../graphql-client.js';
 
-/**
- * Build query params for a Shopify list endpoint from operation inputs.
- *
- * When cursor-based pagination is active (pageInfo.cursor is set) Shopify
- * requires that all parameters except `limit` are omitted; mixing them with
- * page_info results in a 422 error.
- */
-export function buildListQuery(inputs: Record<string, unknown>): Record<string, string> {
-  const query: Record<string, string> = {};
+/** Convert a numeric or string ID to a Shopify Global ID. */
+export function toGid(resource: string, id: string | number): string {
+  const idStr = String(id);
+  if (idStr.startsWith('gid://')) return idStr;
+  return `gid://shopify/${resource}/${idStr}`;
+}
 
-  if (inputs.limit != null) {
-    query.limit = String(inputs.limit);
-  }
+/** Extract the numeric ID from a Shopify Global ID. */
+export function fromGid(gid: string): string {
+  const parts = gid.split('/');
+  return parts[parts.length - 1];
+}
 
-  // Cursor-based pagination: when a cursor is present, only limit is allowed
-  const pageInfo = inputs.pageInfo as PageInfo | undefined;
-  if (pageInfo?.cursor) {
-    query.page_info = pageInfo.cursor;
-    return query;
-  }
-
-  if (typeof inputs.fields === 'string') {
-    query.fields = inputs.fields;
-  }
-
-  if (typeof inputs.status === 'string') {
-    query.status = inputs.status;
-  }
-
-  if (typeof inputs.sinceId === 'string') {
-    query.since_id = inputs.sinceId;
-  }
-
-  return query;
+/** Flatten a GraphQL connection (edges/nodes) into a plain array. */
+export function flattenEdges<T>(connection: {
+  edges: { node: T }[];
+}): T[] {
+  return connection.edges.map((edge) => edge.node);
 }
 
 /**
- * Parse Shopify's Link header to extract cursor-based page info.
+ * Convert GraphQL pageInfo to our standard PageInfo shape.
  *
- * Shopify returns pagination cursors in the Link header:
- *   <https://store.myshopify.com/admin/api/2024-10/products.json?page_info=xyz>; rel="next"
+ * Shopify GraphQL returns:
+ *   { hasNextPage: boolean, endCursor: string | null }
+ *
+ * We map endCursor → cursor for our PageInfo type.
  */
-export function extractShopifyPageInfo(headers: Record<string, string>): PageInfo | null {
-  const link = headers['link'] ?? headers['Link'];
-  if (!link) return null;
-
-  const nextMatch = link.match(/<[^>]*[?&]page_info=([^&>]+)[^>]*>;\s*rel="next"/);
-  if (!nextMatch) return null;
-
+export function toPageInfo(graphqlPageInfo: {
+  hasNextPage: boolean;
+  endCursor?: string | null;
+}): PageInfo | null {
+  if (!graphqlPageInfo.hasNextPage) return null;
   return {
-    cursor: decodeURIComponent(nextMatch[1]),
+    cursor: graphqlPageInfo.endCursor ?? undefined,
     hasNextPage: true,
   };
+}
+
+/**
+ * Build GraphQL pagination variables from operation inputs.
+ *
+ * Accepts `limit` (mapped to `first`) and `pageInfo.cursor` (mapped to `after`).
+ * Defaults `first` to 50 if not specified.
+ */
+export function buildPaginationVariables(inputs: Record<string, unknown>): {
+  first: number;
+  after?: string;
+} {
+  const first = inputs.limit != null ? Number(inputs.limit) : 50;
+  const pageInfo = inputs.pageInfo as { cursor?: string } | undefined;
+  const after = pageInfo?.cursor;
+  return after ? { first, after } : { first };
+}
+
+/**
+ * Build a Shopify search query string from filter inputs.
+ *
+ * Shopify GraphQL list queries accept a `query` parameter using their
+ * search syntax (e.g. "status:active tag:sale").
+ */
+export function buildSearchQuery(inputs: Record<string, unknown>): string | undefined {
+  const parts: string[] = [];
+
+  if (typeof inputs.status === 'string') {
+    parts.push(`status:${inputs.status}`);
+  }
+  if (typeof inputs.query === 'string') {
+    parts.push(inputs.query);
+  }
+
+  return parts.length > 0 ? parts.join(' ') : undefined;
+}
+
+/**
+ * Check for userErrors in a Shopify GraphQL mutation response and throw if present.
+ */
+export function throwOnUserErrors(
+  userErrors: UserError[] | undefined | null,
+  operation: string,
+): void {
+  if (!userErrors?.length) return;
+  const messages = userErrors.map((e) => {
+    const field = e.field?.join('.') ?? '';
+    return field ? `${field}: ${e.message}` : e.message;
+  });
+  throw new Error(`Shopify ${operation} failed: ${messages.join('; ')}`);
 }
