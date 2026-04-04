@@ -39,8 +39,8 @@ export async function connectionRoutes(app: FastifyInstance, deps: AppDeps): Pro
       connectorKey: parsed.data.connectorKey,
       name: parsed.data.name,
       description: parsed.data.description,
-      credentials: parsed.data.credentials as Record<string, unknown>,
-      config: (parsed.data.config ?? {}) as Record<string, unknown>,
+      credentials: parsed.data.credentials,
+      config: parsed.data.config ?? {},
     });
     return reply.status(201).send({ ...connection, credentials: maskCredentials(connection.credentials) });
   });
@@ -58,7 +58,7 @@ export async function connectionRoutes(app: FastifyInstance, deps: AppDeps): Pro
       return reply.status(400).send({ error: 'Validation failed', details: parsed.error.issues });
     }
 
-    const updated = await deps.connectionRepository.update(connectionId, parsed.data as Record<string, unknown>);
+    const updated = await deps.connectionRepository.update(connectionId, parsed.data);
     return reply.send({ ...updated, credentials: maskCredentials(updated.credentials) });
   });
 
@@ -74,15 +74,11 @@ export async function connectionRoutes(app: FastifyInstance, deps: AppDeps): Pro
   });
 }
 
-/** Replace credential values with masked strings for safe API responses. */
+/** Replace all credential values with a fixed mask for safe API responses. */
 function maskCredentials(creds: Record<string, unknown>): Record<string, unknown> {
   const masked: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(creds)) {
-    if (typeof value === 'string' && value.length > 4) {
-      masked[key] = value.slice(0, 4) + '****';
-    } else {
-      masked[key] = '****';
-    }
+  for (const key of Object.keys(creds)) {
+    masked[key] = '****';
   }
   return masked;
 }

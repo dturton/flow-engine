@@ -55,15 +55,25 @@ export function createEngineContext(config: WorkerConfig): EngineContext {
       rateLimitPerSecond: conn.config.rateLimitPerSecond as number | undefined,
     });
   });
+  connectorFactory.registerBuilder('http', (_conn: Connection) => new HttpConnector());
+
+  // Connector cache: keyed by connectionId so each connection shares one instance
+  // (and therefore one RateLimiter) across concurrent steps.
+  const connectorCache = new Map<string, Connector>();
 
   // Connection resolver: loads a Connection from DB and creates a Connector via the factory
   const connectionResolver: ConnectionResolver = {
     async resolve(connectionId: string): Promise<Connector> {
+      const cached = connectorCache.get(connectionId);
+      if (cached) return cached;
+
       const connection = await connectionRepository.findById(connectionId);
       if (!connection) {
         throw new Error(`Connection not found: "${connectionId}"`);
       }
-      return connectorFactory.create(connection);
+      const connector = connectorFactory.create(connection);
+      connectorCache.set(connectionId, connector);
+      return connector;
     },
   };
 

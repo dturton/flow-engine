@@ -2,6 +2,10 @@ import type { PageInfo } from '../../base/types.js';
 
 /**
  * Build query params for a Shopify list endpoint from operation inputs.
+ *
+ * When cursor-based pagination is active (pageInfo.cursor is set) Shopify
+ * requires that all parameters except `limit` are omitted; mixing them with
+ * page_info results in a 422 error.
  */
 export function buildListQuery(inputs: Record<string, unknown>): Record<string, string> {
   const query: Record<string, string> = {};
@@ -10,10 +14,11 @@ export function buildListQuery(inputs: Record<string, unknown>): Record<string, 
     query.limit = String(inputs.limit);
   }
 
-  // Cursor-based pagination: pass page_info from previous response
+  // Cursor-based pagination: when a cursor is present, only limit is allowed
   const pageInfo = inputs.pageInfo as PageInfo | undefined;
   if (pageInfo?.cursor) {
     query.page_info = pageInfo.cursor;
+    return query;
   }
 
   if (typeof inputs.fields === 'string') {
@@ -45,7 +50,7 @@ export function extractShopifyPageInfo(headers: Record<string, string>): PageInf
   if (!nextMatch) return null;
 
   return {
-    cursor: nextMatch[1],
+    cursor: decodeURIComponent(nextMatch[1]),
     hasNextPage: true,
   };
 }

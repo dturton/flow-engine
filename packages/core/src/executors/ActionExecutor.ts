@@ -45,7 +45,12 @@ export class ActionExecutor implements StepExecutor {
     let connector: Connector | undefined;
 
     // If step has a connectionId, resolve dynamically from stored credentials
-    if (step.connectionId && this.connectionResolver) {
+    if (step.connectionId) {
+      if (!this.connectionResolver) {
+        throw new ConnectorNotFoundError(
+          `Step "${step.id}" has connectionId "${step.connectionId}" but no ConnectionResolver is configured`,
+        );
+      }
       connector = await this.connectionResolver.resolve(step.connectionId);
     } else if (step.connectorKey) {
       connector = this.connectorRegistry.get(step.connectorKey);

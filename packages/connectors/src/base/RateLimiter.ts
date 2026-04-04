@@ -23,8 +23,9 @@ export class RateLimiter {
     }
     const waitMs = Math.ceil((1 - this.tokens) / this.refillRatePerMs);
     await new Promise((resolve) => setTimeout(resolve, waitMs));
-    this.refill();
-    this.tokens -= 1;
+    // Recurse instead of blindly decrementing: another caller may have consumed
+    // the token that became available during the wait.
+    return this.acquire();
   }
 
   private refill(): void {
