@@ -11,19 +11,22 @@
     "prisma:generate": "prisma generate"
   },
   "dependencies": {
-    "ioredis": "^5.3.2",
     "@aws-sdk/client-s3": "^3.600.0",
+    "@prisma/adapter-pg": "^7.6.0",
+    "@prisma/client": "^7.6.0",
     "bullmq": "^5.8.0",
-    "@prisma/client": "^5.14.0",
+    "ioredis": "^5.3.2",
     "jsonata": "^2.0.5",
     "jsonpath-plus": "^9.0.0",
+    "pg": "^8.20.0",
     "uuid": "^10.0.0"
   },
   "devDependencies": {
-    "prisma": "^5.14.0",
-    "vitest": "^1.6.0",
-    "typescript": "^5.4.5",
     "@types/node": "^20.14.0",
-    "@types/uuid": "^10.0.0"
+    "@types/pg": "^8.20.0",
+    "@types/uuid": "^10.0.0",
+    "prisma": "^7.6.0",
+    "typescript": "^5.4.5",
+    "vitest": "^1.6.0"
   }
 }

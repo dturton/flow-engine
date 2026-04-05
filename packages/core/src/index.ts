@@ -20,3 +20,6 @@ export { DelayExecutor } from './executors/DelayExecutor.js';
 export * from './types/flow.js';
 export * from './types/run.js';
 export * from './errors.js';
+export { PrismaClient } from './generated/prisma/client.js';
+export type { Prisma } from './generated/prisma/client.js';
+export { createPrismaClient } from './persistence/createPrismaClient.js';

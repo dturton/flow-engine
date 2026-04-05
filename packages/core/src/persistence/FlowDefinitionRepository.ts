@@ -1,4 +1,4 @@
-import type { PrismaClient, Prisma } from '@prisma/client';
+import type { PrismaClient, Prisma } from '../generated/prisma/client.js';
 import type { FlowDefinition } from '../types/flow.js';
 
 export class FlowDefinitionRepository {

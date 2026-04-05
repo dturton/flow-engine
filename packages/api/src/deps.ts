@@ -1,12 +1,12 @@
-import { PrismaClient } from '@prisma/client';
 import { Redis } from 'ioredis';
 import { S3Client } from '@aws-sdk/client-s3';
 import { Queue } from 'bullmq';
-import { FlowRunRepository, FlowDefinitionRepository, ConnectionRepository } from '@flow-engine/core';
+import { createPrismaClient, FlowRunRepository, FlowDefinitionRepository, ConnectionRepository } from '@flow-engine/core';
+import type { PrismaClient } from '@flow-engine/core';
 import type { AppConfig } from './config.js';
 
 export interface AppDeps {
-  prisma: PrismaClient;
+  prisma: InstanceType<typeof PrismaClient>;
   redis: Redis;
   s3: S3Client;
   flowQueue: Queue;
@@ -16,7 +16,7 @@ export interface AppDeps {
 }
 
 export function createDeps(config: AppConfig): AppDeps {
-  const prisma = new PrismaClient();
+  const prisma = createPrismaClient();
 
   const redis = new Redis(config.redisUrl, { maxRetriesPerRequest: null });
 

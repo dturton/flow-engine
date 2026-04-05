@@ -1,5 +1,5 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
-import type { PrismaClient, Prisma, Connection as PrismaConnection } from '@prisma/client';
+import type { PrismaClient, Prisma, Connection as PrismaConnection } from '../generated/prisma/client.js';
 
 const ALGORITHM = 'aes-256-gcm' as const;
 

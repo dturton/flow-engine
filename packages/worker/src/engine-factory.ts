@@ -1,7 +1,7 @@
-import { PrismaClient } from '@prisma/client';
 import { Redis } from 'ioredis';
 import { S3Client } from '@aws-sdk/client-s3';
 import {
+  createPrismaClient,
   FlowEngine,
   DagResolver,
   ContextStore,
@@ -18,20 +18,20 @@ import {
   LoopExecutor,
   DelayExecutor,
 } from '@flow-engine/core';
-import type { Connector, ConnectionResolver } from '@flow-engine/core';
+import type { Connector, ConnectionResolver, PrismaClient } from '@flow-engine/core';
 import type { WorkerConfig } from './config.js';
 import { HttpConnector, ShopifyConnector, ConnectorFactory } from '@flow-engine/connectors';
 import type { Connection } from '@flow-engine/core';
 
 export interface EngineContext {
   engine: FlowEngine;
-  prisma: PrismaClient;
+  prisma: InstanceType<typeof PrismaClient>;
   redis: Redis;
   s3: S3Client;
 }
 
 export function createEngineContext(config: WorkerConfig): EngineContext {
-  const prisma = new PrismaClient();
+  const prisma = createPrismaClient();
   const redis = new Redis(config.redisUrl, { maxRetriesPerRequest: null });
   const s3 = new S3Client({
     region: config.s3Region,

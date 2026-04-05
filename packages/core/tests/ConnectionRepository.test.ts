@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ConnectionRepository } from '../src/persistence/ConnectionRepository.js';
-import type { PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '../src/generated/prisma/client.js';
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 
