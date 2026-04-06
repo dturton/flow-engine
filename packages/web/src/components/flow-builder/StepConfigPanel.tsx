@@ -1,0 +1,409 @@
+import CodeEditor from '../CodeEditor.js';
+import InputMappingEditor from './InputMappingEditor.js';
+import { STEP_TYPE_MAP } from './stepTypeConfig.js';
+import type {
+  FlowBuilderAction,
+  StepDefinition,
+  BranchCase,
+  RetryPolicy,
+  MappingExpression,
+} from './useFlowBuilderState.js';
+
+interface StepConfigPanelProps {
+  step: StepDefinition;
+  allSteps: StepDefinition[];
+  dispatch: React.Dispatch<FlowBuilderAction>;
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-2">
+      <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{title}</h4>
+      {children}
+    </div>
+  );
+}
+
+function FieldRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="block text-xs text-gray-500 mb-0.5">{label}</label>
+      {children}
+    </div>
+  );
+}
+
+const inputClass = 'w-full text-xs border border-gray-300 rounded px-2 py-1.5 focus:ring-1 focus:ring-blue-500 focus:border-blue-500';
+const selectClass = 'w-full text-xs border border-gray-300 rounded px-2 py-1.5 bg-white focus:ring-1 focus:ring-blue-500';
+
+export default function StepConfigPanel({ step, allSteps, dispatch }: StepConfigPanelProps) {
+  const typeInfo = STEP_TYPE_MAP[step.type];
+
+  const update = (changes: Partial<StepDefinition>) => {
+    dispatch({ type: 'UPDATE_STEP', payload: { stepId: step.id, changes } });
+  };
+
+  const deleteStep = () => {
+    dispatch({ type: 'DELETE_STEP', payload: { stepId: step.id } });
+  };
+
+  // Script body helper
+  const scriptExpr = step.type === 'script' ? step.inputMapping['script'] : undefined;
+  const scriptBody = scriptExpr
+    ? typeof scriptExpr === 'string'
+      ? scriptExpr
+      : scriptExpr.value
+    : '';
+
+  const setScript = (body: string) => {
+    update({
+      inputMapping: {
+        ...step.inputMapping,
+        script: { type: 'literal' as const, value: body },
+      },
+    });
+  };
+
+  return (
+    <div className="w-[400px] flex-shrink-0 border-l border-gray-200 bg-white overflow-y-auto">
+      <div className="p-4 space-y-4">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${typeInfo.bgColor} ${typeInfo.color}`}>
+              {typeInfo.label}
+            </span>
+            <span className="text-xs text-gray-400 font-mono">{step.id}</span>
+          </div>
+          <button
+            onClick={deleteStep}
+            className="text-xs text-red-500 hover:text-red-700 font-medium"
+          >
+            Delete
+          </button>
+        </div>
+
+        {/* Common fields */}
+        <Section title="General">
+          <FieldRow label="Name">
+            <input
+              type="text"
+              value={step.name}
+              onChange={(e) => update({ name: e.target.value })}
+              className={inputClass}
+            />
+          </FieldRow>
+          <FieldRow label="ID">
+            <input type="text" value={step.id} readOnly className={`${inputClass} bg-gray-50 text-gray-500`} />
+          </FieldRow>
+        </Section>
+
+        {/* Action-specific */}
+        {step.type === 'action' && (
+          <Section title="Connector">
+            <FieldRow label="Connector Key">
+              <input
+                type="text"
+                value={step.connectorKey ?? ''}
+                onChange={(e) => update({ connectorKey: e.target.value })}
+                className={inputClass}
+                placeholder="e.g. http, shopify"
+              />
+            </FieldRow>
+            <FieldRow label="Connection ID">
+              <input
+                type="text"
+                value={step.connectionId ?? ''}
+                onChange={(e) => update({ connectionId: e.target.value })}
+                className={inputClass}
+                placeholder="Optional credential reference"
+              />
+            </FieldRow>
+            <FieldRow label="Operation ID">
+              <input
+                type="text"
+                value={step.operationId ?? ''}
+                onChange={(e) => update({ operationId: e.target.value })}
+                className={inputClass}
+                placeholder="e.g. request, products.list"
+              />
+            </FieldRow>
+            <RetryPolicyEditor
+              policy={step.retryPolicy}
+              onChange={(retryPolicy) => update({ retryPolicy })}
+            />
+          </Section>
+        )}
+
+        {/* Script-specific */}
+        {step.type === 'script' && (
+          <Section title="Script">
+            <CodeEditor
+              value={scriptBody}
+              onChange={setScript}
+              placeholder="// Your code here..."
+              height="160px"
+            />
+          </Section>
+        )}
+
+        {/* Branch-specific */}
+        {step.type === 'branch' && (
+          <Section title="Branches">
+            <BranchEditor
+              branches={step.branches ?? []}
+              allSteps={allSteps}
+              currentStepId={step.id}
+              onChange={(branches) => update({ branches })}
+            />
+          </Section>
+        )}
+
+        {/* Loop-specific */}
+        {step.type === 'loop' && (
+          <Section title="Loop">
+            <FieldRow label="Loop Over (JSONPath)">
+              <input
+                type="text"
+                value={step.loopOver ?? ''}
+                onChange={(e) => update({ loopOver: e.target.value })}
+                className={`${inputClass} font-mono`}
+                placeholder="$.steps.previous.data.items"
+              />
+            </FieldRow>
+          </Section>
+        )}
+
+        {/* Delay-specific */}
+        {step.type === 'delay' && (
+          <Section title="Delay">
+            <FieldRow label="Delay (ms)">
+              <input
+                type="number"
+                value={
+                  (() => {
+                    const val = step.inputMapping['delayMs'];
+                    return val ? (typeof val === 'string' ? val : val.value) : '1000';
+                  })()
+                }
+                onChange={(e) =>
+                  update({
+                    inputMapping: {
+                      ...step.inputMapping,
+                      delayMs: { type: 'literal', value: e.target.value },
+                    },
+                  })
+                }
+                className={inputClass}
+                min={0}
+              />
+            </FieldRow>
+          </Section>
+        )}
+
+        {/* Input mapping for all types */}
+        <InputMappingEditor
+          mapping={step.inputMapping}
+          onChange={(inputMapping) => update({ inputMapping })}
+          excludeKeys={step.type === 'script' ? ['script'] : step.type === 'delay' ? ['delayMs'] : []}
+        />
+
+        {/* Advanced options */}
+        <Section title="Advanced">
+          <FieldRow label="Timeout (ms)">
+            <input
+              type="number"
+              value={step.timeoutMs ?? ''}
+              onChange={(e) =>
+                update({ timeoutMs: e.target.value ? Number(e.target.value) : undefined })
+              }
+              className={inputClass}
+              placeholder="Optional"
+              min={0}
+            />
+          </FieldRow>
+          <label className="flex items-center gap-2 text-xs text-gray-600">
+            <input
+              type="checkbox"
+              checked={step.continueOnError ?? false}
+              onChange={(e) => update({ continueOnError: e.target.checked })}
+              className="rounded border-gray-300"
+            />
+            Continue on error
+          </label>
+        </Section>
+      </div>
+    </div>
+  );
+}
+
+function BranchEditor({
+  branches,
+  allSteps,
+  currentStepId,
+  onChange,
+}: {
+  branches: BranchCase[];
+  allSteps: StepDefinition[];
+  currentStepId: string;
+  onChange: (branches: BranchCase[]) => void;
+}) {
+  const updateBranch = (idx: number, changes: Partial<BranchCase>) => {
+    onChange(branches.map((b, i) => (i === idx ? { ...b, ...changes } : b)));
+  };
+
+  const removeBranch = (idx: number) => {
+    onChange(branches.filter((_, i) => i !== idx));
+  };
+
+  const addBranch = () => {
+    onChange([...branches, { when: 'true', nextStepId: '' }]);
+  };
+
+  const otherSteps = allSteps.filter((s) => s.id !== currentStepId);
+
+  return (
+    <div className="space-y-2">
+      {branches.map((branch, idx) => (
+        <div key={idx} className="bg-gray-50 rounded-lg p-2 space-y-1.5">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-gray-400">Branch {idx + 1}</span>
+            <button
+              onClick={() => removeBranch(idx)}
+              className="text-xs text-gray-400 hover:text-red-500"
+            >
+              &times;
+            </button>
+          </div>
+          <textarea
+            value={branch.when}
+            onChange={(e) => updateBranch(idx, { when: e.target.value })}
+            rows={1}
+            className="w-full text-xs font-mono border border-gray-300 rounded px-2 py-1 focus:ring-1 focus:ring-blue-500 resize-y"
+            placeholder="JSONata condition"
+          />
+          <select
+            value={branch.nextStepId}
+            onChange={(e) => updateBranch(idx, { nextStepId: e.target.value })}
+            className={selectClass}
+          >
+            <option value="">Go to step...</option>
+            {otherSteps.map((s) => (
+              <option key={s.id} value={s.id}>{s.name} ({s.id})</option>
+            ))}
+          </select>
+        </div>
+      ))}
+      <button onClick={addBranch} className="text-xs text-blue-600 hover:text-blue-800 font-medium">
+        + Add branch
+      </button>
+    </div>
+  );
+}
+
+const RETRYABLE_ERRORS = ['network', 'rateLimit', 'timeout', 'serverError'] as const;
+
+function RetryPolicyEditor({
+  policy,
+  onChange,
+}: {
+  policy?: RetryPolicy;
+  onChange: (policy?: RetryPolicy) => void;
+}) {
+  if (!policy) {
+    return (
+      <button
+        onClick={() =>
+          onChange({
+            maxAttempts: 2,
+            strategy: 'fixed',
+            initialDelayMs: 1000,
+            maxDelayMs: 5000,
+            retryableErrors: ['network', 'timeout'],
+          })
+        }
+        className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+      >
+        + Add retry policy
+      </button>
+    );
+  }
+
+  const update = (changes: Partial<RetryPolicy>) => onChange({ ...policy, ...changes });
+
+  return (
+    <div className="bg-gray-50 rounded-lg p-2 space-y-1.5">
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] font-medium text-gray-500">Retry Policy</span>
+        <button onClick={() => onChange(undefined)} className="text-xs text-gray-400 hover:text-red-500">
+          &times;
+        </button>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="text-[10px] text-gray-400">Max Attempts</label>
+          <input
+            type="number"
+            value={policy.maxAttempts}
+            onChange={(e) => update({ maxAttempts: Number(e.target.value) })}
+            className={inputClass}
+            min={1}
+          />
+        </div>
+        <div>
+          <label className="text-[10px] text-gray-400">Strategy</label>
+          <select
+            value={policy.strategy}
+            onChange={(e) => update({ strategy: e.target.value as RetryPolicy['strategy'] })}
+            className={selectClass}
+          >
+            <option value="fixed">Fixed</option>
+            <option value="exponential">Exponential</option>
+            <option value="jitter">Jitter</option>
+          </select>
+        </div>
+        <div>
+          <label className="text-[10px] text-gray-400">Initial Delay (ms)</label>
+          <input
+            type="number"
+            value={policy.initialDelayMs}
+            onChange={(e) => update({ initialDelayMs: Number(e.target.value) })}
+            className={inputClass}
+            min={0}
+          />
+        </div>
+        <div>
+          <label className="text-[10px] text-gray-400">Max Delay (ms)</label>
+          <input
+            type="number"
+            value={policy.maxDelayMs}
+            onChange={(e) => update({ maxDelayMs: Number(e.target.value) })}
+            className={inputClass}
+            min={0}
+          />
+        </div>
+      </div>
+      <div>
+        <label className="text-[10px] text-gray-400">Retryable Errors</label>
+        <div className="flex flex-wrap gap-1.5 mt-1">
+          {RETRYABLE_ERRORS.map((err) => (
+            <label key={err} className="flex items-center gap-1 text-[10px] text-gray-600">
+              <input
+                type="checkbox"
+                checked={policy.retryableErrors.includes(err)}
+                onChange={(e) => {
+                  const next = e.target.checked
+                    ? [...policy.retryableErrors, err]
+                    : policy.retryableErrors.filter((r) => r !== err);
+                  update({ retryableErrors: next });
+                }}
+                className="rounded border-gray-300"
+              />
+              {err}
+            </label>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}

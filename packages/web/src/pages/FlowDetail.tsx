@@ -6,7 +6,7 @@
  */
 
 import { useEffect, useState, useCallback } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { api, type FlowSummary, type FlowRunSummary, type WebhookSummary } from '../api.js';
 import StatusBadge from '../components/StatusBadge.js';
 import FunctionEditor from '../components/FunctionEditor.js';
@@ -15,7 +15,9 @@ import FlowGraph from '../components/FlowGraph.js';
 /** Full detail view for a single flow including graph, webhooks, and run history */
 export default function FlowDetail() {
   const { flowId } = useParams<{ flowId: string }>();
+  const navigate = useNavigate();
   const [flow, setFlow] = useState<FlowSummary | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [runs, setRuns] = useState<FlowRunSummary[]>([]);
   const [webhooks, setWebhooks] = useState<WebhookSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -120,6 +122,23 @@ export default function FlowDetail() {
         </div>
         <div className="text-right">
           <div className="flex gap-2">
+            <button
+              onClick={async () => {
+                if (!flowId || !confirm('Are you sure you want to delete this flow? This cannot be undone.')) return;
+                setDeleting(true);
+                try {
+                  await api.deleteFlow(flowId);
+                  navigate('/flows');
+                } catch (err) {
+                  setTriggerError(err instanceof Error ? err.message : 'Delete failed');
+                  setDeleting(false);
+                }
+              }}
+              disabled={deleting}
+              className="px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 disabled:opacity-50 text-sm font-medium"
+            >
+              {deleting ? 'Deleting...' : 'Delete'}
+            </button>
             <Link to={`/flows/${flowId}/edit`} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm font-medium">
               Edit
             </Link>

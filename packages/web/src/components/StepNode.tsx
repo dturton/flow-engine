@@ -27,6 +27,7 @@ export interface StepNodeData {
   type: string;
   status?: string;
   durationMs?: number;
+  builderMode?: boolean;
   [key: string]: unknown;
 }
 
@@ -49,14 +50,16 @@ export default function StepNode({ data, selected }: NodeProps) {
       <div className="flex items-center justify-between mt-1">
         {/* Step type badge (e.g. transform, action, branch) */}
         <span className="bg-purple-100 text-purple-700 text-[10px] px-1.5 py-0.5 rounded">{d.type}</span>
-        <div className="flex items-center gap-1.5">
-          {/* Execution duration (only shown after step completes) */}
-          {d.durationMs != null && (
-            <span className="text-[10px] text-gray-400">{d.durationMs}ms</span>
-          )}
-          {/* Status indicator dot — pulses when running */}
-          <span className={`inline-block w-2 h-2 rounded-full ${status === 'completed' ? 'bg-green-400' : status === 'failed' ? 'bg-red-400' : status === 'running' ? 'bg-blue-400 animate-pulse' : status === 'cancelled' ? 'bg-orange-400' : status === 'retrying' ? 'bg-yellow-400' : 'bg-gray-300'}`} />
-        </div>
+        {!d.builderMode && (
+          <div className="flex items-center gap-1.5">
+            {/* Execution duration (only shown after step completes) */}
+            {d.durationMs != null && (
+              <span className="text-[10px] text-gray-400">{d.durationMs}ms</span>
+            )}
+            {/* Status indicator dot — pulses when running */}
+            <span className={`inline-block w-2 h-2 rounded-full ${status === 'completed' ? 'bg-green-400' : status === 'failed' ? 'bg-red-400' : status === 'running' ? 'bg-blue-400 animate-pulse' : status === 'cancelled' ? 'bg-orange-400' : status === 'retrying' ? 'bg-yellow-400' : 'bg-gray-300'}`} />
+          </div>
+        )}
       </div>
 
       {/* Outgoing edge connection point (dependent steps connect from here) */}
