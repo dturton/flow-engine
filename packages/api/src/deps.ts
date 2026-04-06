@@ -1,7 +1,7 @@
 import { Redis } from 'ioredis';
 import { S3Client } from '@aws-sdk/client-s3';
 import { Queue } from 'bullmq';
-import { createPrismaClient, FlowRunRepository, FlowDefinitionRepository, ConnectionRepository } from '@flow-engine/core';
+import { createPrismaClient, FlowRunRepository, FlowDefinitionRepository, ConnectionRepository, WebhookRepository } from '@flow-engine/core';
 import type { PrismaClient } from '@flow-engine/core';
 import type { AppConfig } from './config.js';
 
@@ -13,6 +13,7 @@ export interface AppDeps {
   runRepository: FlowRunRepository;
   flowRepository: FlowDefinitionRepository;
   connectionRepository: ConnectionRepository;
+  webhookRepository: WebhookRepository;
 }
 
 export function createDeps(config: AppConfig): AppDeps {
@@ -33,8 +34,9 @@ export function createDeps(config: AppConfig): AppDeps {
   const runRepository = new FlowRunRepository(prisma);
   const flowRepository = new FlowDefinitionRepository(prisma);
   const connectionRepository = new ConnectionRepository(prisma);
+  const webhookRepository = new WebhookRepository(prisma);
 
-  return { prisma, redis, s3, flowQueue, runRepository, flowRepository, connectionRepository };
+  return { prisma, redis, s3, flowQueue, runRepository, flowRepository, connectionRepository, webhookRepository };
 }
 
 export async function closeDeps(deps: AppDeps): Promise<void> {

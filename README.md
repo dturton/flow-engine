@@ -23,21 +23,22 @@ A TypeScript iPaaS flow orchestration engine (similar to Celigo). Define multi-s
 └──────────────┘
 ```
 
-**Four packages** in a pnpm monorepo:
+**Five packages** in a pnpm monorepo:
 
 | Package | Description |
 |---------|-------------|
-| `@flow-engine/core` | DAG resolver, flow engine, step executors, context store, Prisma persistence |
-| `@flow-engine/api` | Fastify REST API — flow CRUD, trigger, run queries, health check |
+| `@flow-engine/core` | DAG resolver, flow engine, step executors, context store, Prisma persistence, webhook signature utils |
+| `@flow-engine/api` | Fastify REST API — flow CRUD, trigger, webhooks, run queries, health check |
+| `@flow-engine/connectors` | Connector library — BaseConnector, HttpConnector, ShopifyConnector (GraphQL), RateLimiter |
 | `@flow-engine/worker` | BullMQ consumer — instantiates the engine and processes queued jobs |
-| `@flow-engine/web` | React 18 + Vite + Tailwind dashboard — flow list, detail, run viewer |
+| `@flow-engine/web` | React 18 + Vite + Tailwind dashboard — flow list, detail, run viewer, function editor |
 
 ### How it works
 
-1. **Define a flow** — a list of steps with input mappings, dependencies, retry policies
-2. **Trigger via API** — the API validates the DAG and enqueues a BullMQ job
+1. **Define a flow** — a list of steps with input mappings, dependencies, retry policies, and reusable functions
+2. **Trigger via API or webhook** — the API validates the DAG and enqueues a BullMQ job
 3. **Worker picks it up** — resolves the DAG, executes steps in parallel (respecting dependencies)
-4. **Steps run through executors** — Action (HTTP), Transform, Branch (JSONata), Script (sandboxed VM), Loop, Delay
+4. **Steps run through executors** — Action (HTTP/Shopify), Transform, Branch (JSONata), Script (sandboxed VM), Loop, Delay
 5. **Context flows between steps** — outputs stored in Redis (large payloads offloaded to S3/MinIO)
 6. **Results persisted** — run history and step-level logs saved to PostgreSQL
 
@@ -101,16 +102,27 @@ Open http://localhost:5173 to view the dashboard.
 | `GET` | `/api/flows/:flowId/runs` | List runs for a flow (`?limit=`) |
 | `GET` | `/api/runs/:runId` | Get run details with step-level output/logs |
 | `POST` | `/api/runs/:runId/cancel` | Cancel a running/queued run |
+| `POST` | `/api/flows/:flowId/webhooks` | Create a webhook for a flow |
+| `GET` | `/api/flows/:flowId/webhooks` | List webhooks for a flow |
+| `DELETE` | `/api/webhooks/:id` | Delete a webhook |
+| `POST` | `/webhooks/:path` | **Public** — trigger a flow via webhook |
 | `GET` | `/api/health` | Health check (checks Redis connectivity) |
 
 ## Flow Definition
 
-A flow is a list of steps forming a DAG:
+A flow is a list of steps forming a DAG, with optional reusable functions:
 
 ```json
 {
   "name": "My Integration",
   "tenantId": "tenant_1",
+  "functions": [
+    {
+      "name": "formatCurrency",
+      "params": ["amount", "currency"],
+      "body": "return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(amount);"
+    }
+  ],
   "steps": [
     {
       "id": "fetch_data",
@@ -139,6 +151,16 @@ A flow is a list of steps forming a DAG:
         "items": { "type": "jsonpath", "value": "$.steps.fetch_data.body.results" }
       },
       "dependsOn": ["fetch_data"]
+    },
+    {
+      "id": "format_prices",
+      "name": "Format Prices",
+      "type": "script",
+      "inputMapping": {
+        "script": { "type": "literal", "value": "output = { price: formatCurrency(inputs.amount, 'USD') };" },
+        "amount": { "type": "jsonpath", "value": "$.steps.transform.items[0].price" }
+      },
+      "dependsOn": ["transform"]
     }
   ],
   "errorPolicy": { "onStepFailure": "halt" }
@@ -149,12 +171,35 @@ A flow is a list of steps forming a DAG:
 
 | Type | Description |
 |------|-------------|
-| `action` | Delegates to a connector (e.g., HTTP requests) |
+| `action` | Delegates to a connector (e.g., HTTP, Shopify GraphQL) |
 | `transform` | Passes resolved inputs through as output |
 | `branch` | Evaluates JSONata conditions to choose the next step |
 | `script` | Runs JavaScript in a sandboxed Node.js `vm` (5s timeout) |
 | `loop` | Iterates over a JSONPath array from context |
 | `delay` | Waits a specified number of milliseconds |
+
+### Flow Functions
+
+Define reusable JavaScript functions at the flow level that any `script` step can call:
+
+```json
+{
+  "functions": [
+    {
+      "name": "double",
+      "params": ["x"],
+      "body": "return x * 2;"
+    },
+    {
+      "name": "sumOfDoubles",
+      "params": ["a", "b"],
+      "body": "return double(a) + double(b);"
+    }
+  ]
+}
+```
+
+Functions are injected into the VM sandbox as declarations — they share the same timeout and security constraints as the script step. They can call each other and access `inputs` and `context`. Function names must be valid JS identifiers and cannot conflict with sandbox builtins (`inputs`, `context`, `output`, `console`).
 
 ### Input Mapping Expressions
 
@@ -164,6 +209,58 @@ A flow is a list of steps forming a DAG:
 | `jsonpath` | `$.steps.step1.result` | JSONPath into execution context |
 | `jsonata` | `$sum(items.price)` | JSONata expression |
 | `template` | `Hello {{name}}` | String interpolation |
+
+## Webhooks
+
+Flows can be triggered by external services via webhooks. Each webhook gets a unique URL and an HMAC-SHA256 secret for signature verification.
+
+### Create a webhook
+
+```bash
+curl -X POST http://localhost:3000/api/flows/<flowId>/webhooks
+# Returns: { id, flowId, path, secret, active, ... }
+```
+
+### Trigger via webhook
+
+```bash
+# Simple (no signature verification)
+curl -X POST http://localhost:3000/webhooks/<path> \
+  -H "Content-Type: application/json" \
+  -d '{"order_id": 123}'
+
+# With HMAC signature
+BODY='{"order_id":123}'
+SIG=$(echo -n "$BODY" | openssl dgst -sha256 -hmac "<secret>" | cut -d' ' -f2)
+curl -X POST http://localhost:3000/webhooks/<path> \
+  -H "Content-Type: application/json" \
+  -H "X-Webhook-Signature: sha256=$SIG" \
+  -d "$BODY"
+```
+
+The webhook trigger payload includes the request body, headers, and query parameters:
+
+```json
+{
+  "type": "webhook",
+  "data": {
+    "body": { "order_id": 123 },
+    "headers": { ... },
+    "query": { ... },
+    "webhookId": "...",
+    "webhookPath": "..."
+  }
+}
+```
+
+## Connectors
+
+| Connector | Operations |
+|-----------|------------|
+| `http` | Generic HTTP requests (GET, POST, PUT, DELETE, etc.) |
+| `shopify` | GraphQL Admin API — products, orders, customers, inventory |
+
+New connectors extend `BaseConnector` in `@flow-engine/connectors` and register operation handlers.
 
 ## Infrastructure
 

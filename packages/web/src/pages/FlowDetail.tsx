@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { api, type FlowSummary, type FlowRunSummary } from '../api.js';
+import { api, type FlowSummary, type FlowRunSummary, type WebhookSummary } from '../api.js';
 import StatusBadge from '../components/StatusBadge.js';
 import FunctionEditor from '../components/FunctionEditor.js';
 
@@ -8,15 +8,18 @@ export default function FlowDetail() {
   const { flowId } = useParams<{ flowId: string }>();
   const [flow, setFlow] = useState<FlowSummary | null>(null);
   const [runs, setRuns] = useState<FlowRunSummary[]>([]);
+  const [webhooks, setWebhooks] = useState<WebhookSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [triggerError, setTriggerError] = useState<string | null>(null);
   const [triggering, setTriggering] = useState(false);
+  const [creatingWebhook, setCreatingWebhook] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!flowId) return;
-    Promise.all([api.getFlow(flowId), api.listRuns(flowId)])
-      .then(([f, r]) => { setFlow(f); setRuns(r); })
+    Promise.all([api.getFlow(flowId), api.listRuns(flowId), api.listWebhooks(flowId)])
+      .then(([f, r, w]) => { setFlow(f); setRuns(r); setWebhooks(w); })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, [flowId]);
@@ -34,6 +37,38 @@ export default function FlowDetail() {
     } finally {
       setTriggering(false);
     }
+  };
+
+  const handleCreateWebhook = async () => {
+    if (!flowId) return;
+    setCreatingWebhook(true);
+    try {
+      const webhook = await api.createWebhook(flowId);
+      setWebhooks((prev) => [webhook, ...prev]);
+    } catch (err) {
+      setTriggerError(err instanceof Error ? err.message : 'Failed to create webhook');
+    } finally {
+      setCreatingWebhook(false);
+    }
+  };
+
+  const handleDeleteWebhook = async (id: string) => {
+    try {
+      await api.deleteWebhook(id);
+      setWebhooks((prev) => prev.filter((w) => w.id !== id));
+    } catch (err) {
+      setTriggerError(err instanceof Error ? err.message : 'Failed to delete webhook');
+    }
+  };
+
+  const getWebhookUrl = useCallback((path: string) => {
+    return `${window.location.origin}/webhooks/${path}`;
+  }, []);
+
+  const copyToClipboard = (text: string, id: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
   };
 
   if (loading) return <p className="text-gray-500">Loading...</p>;
@@ -114,6 +149,79 @@ export default function FlowDetail() {
           </div>
         </section>
       )}
+
+      {/* Webhooks */}
+      <section className="mb-8">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-lg font-semibold">Webhooks ({webhooks.length})</h2>
+          <button
+            onClick={handleCreateWebhook}
+            disabled={creatingWebhook}
+            className="px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 text-xs font-medium"
+          >
+            {creatingWebhook ? 'Creating...' : '+ Create Webhook'}
+          </button>
+        </div>
+
+        {webhooks.length === 0 ? (
+          <p className="text-gray-500 text-sm">No webhooks configured. Create one to trigger this flow from external services.</p>
+        ) : (
+          <div className="space-y-3">
+            {webhooks.map((wh) => (
+              <div key={wh.id} className="bg-white rounded-lg shadow p-4">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1 min-w-0">
+                    {/* URL */}
+                    <div className="mb-2">
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Webhook URL</label>
+                      <div className="flex items-center gap-2">
+                        <code className="text-sm bg-gray-100 px-2 py-1 rounded font-mono text-gray-800 truncate block flex-1">
+                          {getWebhookUrl(wh.path)}
+                        </code>
+                        <button
+                          onClick={() => copyToClipboard(getWebhookUrl(wh.path), `url-${wh.id}`)}
+                          className="text-xs px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded text-gray-600 shrink-0"
+                        >
+                          {copiedId === `url-${wh.id}` ? 'Copied!' : 'Copy'}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Secret */}
+                    <div className="mb-2">
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Secret (for HMAC-SHA256 signature)</label>
+                      <div className="flex items-center gap-2">
+                        <code className="text-sm bg-gray-100 px-2 py-1 rounded font-mono text-gray-800 truncate block flex-1">
+                          {wh.secret}
+                        </code>
+                        <button
+                          onClick={() => copyToClipboard(wh.secret, `secret-${wh.id}`)}
+                          className="text-xs px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded text-gray-600 shrink-0"
+                        >
+                          {copiedId === `secret-${wh.id}` ? 'Copied!' : 'Copy'}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Usage hint */}
+                    <p className="text-xs text-gray-400 mt-2">
+                      POST any JSON to the URL above. Optionally sign with <code className="bg-gray-100 px-1 rounded">X-Webhook-Signature: sha256=hmac_hex</code>
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() => handleDeleteWebhook(wh.id)}
+                    className="ml-4 text-gray-400 hover:text-red-500 text-sm shrink-0"
+                    title="Delete webhook"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
 
       {/* Runs */}
       <section>

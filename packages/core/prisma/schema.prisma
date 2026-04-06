@@ -23,6 +23,18 @@ model FlowDefinition {
   @@unique([id, version])
 }
 
+model Webhook {
+  id        String    @id @default(cuid())
+  flowId    String
+  path      String    @unique
+  secret    String
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([flowId])
+}
+
 model Connection {
   id            String    @id @default(cuid())
   tenantId      String

@@ -51,6 +51,16 @@ export interface FlowRunSummary {
   error?: { stepId: string; error: { code: string; message: string }; at: string };
 }
 
+export interface WebhookSummary {
+  id: string;
+  flowId: string;
+  path: string;
+  secret: string;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export const api = {
   listFlows: () => request<FlowSummary[]>('/flows'),
   getFlow: (id: string) => request<FlowSummary>(`/flows/${id}`),
@@ -61,4 +71,7 @@ export const api = {
   listRuns: (flowId: string) => request<FlowRunSummary[]>(`/flows/${flowId}/runs`),
   getRun: (runId: string) => request<FlowRunSummary>(`/runs/${runId}`),
   cancelRun: (runId: string) => request<void>(`/runs/${runId}/cancel`, { method: 'POST' }),
+  listWebhooks: (flowId: string) => request<WebhookSummary[]>(`/flows/${flowId}/webhooks`),
+  createWebhook: (flowId: string) => request<WebhookSummary>(`/flows/${flowId}/webhooks`, { method: 'POST' }),
+  deleteWebhook: (id: string) => request<void>(`/webhooks/${id}`, { method: 'DELETE' }),
 };

@@ -6,6 +6,7 @@ import { flowRoutes } from './routes/flows.js';
 import { runRoutes } from './routes/runs.js';
 import { connectionRoutes } from './routes/connections.js';
 import { healthRoutes } from './routes/health.js';
+import { webhookRoutes } from './routes/webhooks.js';
 
 export async function buildApp(config: AppConfig, deps: AppDeps) {
   const app = Fastify({
@@ -31,6 +32,7 @@ export async function buildApp(config: AppConfig, deps: AppDeps) {
   await runRoutes(app, deps);
   await connectionRoutes(app, deps);
   await healthRoutes(app, deps);
+  await webhookRoutes(app, deps);
 
   return app;
 }
