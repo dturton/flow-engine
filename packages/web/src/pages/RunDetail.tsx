@@ -192,6 +192,13 @@ export default function RunDetail() {
                   </div>
                 )}
 
+                {step.input && Object.keys(step.input).length > 0 && (
+                  <details className="mt-2">
+                    <summary className="text-sm text-gray-500 cursor-pointer hover:text-gray-700">Input</summary>
+                    <pre className="mt-1 text-xs bg-gray-50 rounded p-2 overflow-x-auto">{JSON.stringify(step.input, null, 2)}</pre>
+                  </details>
+                )}
+
                 {step.output && (
                   <details className="mt-2">
                     <summary className="text-sm text-gray-500 cursor-pointer hover:text-gray-700">Output</summary>

@@ -1,10 +1,12 @@
-import { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useMemo } from 'react';
 import {
   ReactFlow,
   ReactFlowProvider,
   Controls,
   Background,
-  useReactFlow,
+  useNodesState,
+  useEdgesState,
+  addEdge,
   type Node,
   type Edge,
   type Connection,
@@ -16,6 +18,7 @@ import { layoutSteps } from './flowBuilderUtils.js';
 import { hasCycle } from './flowBuilderUtils.js';
 import type { FlowBuilderAction, StepDefinition, StepType } from './useFlowBuilderState.js';
 import '@xyflow/react/dist/style.css';
+import { useEffect } from 'react';
 
 const nodeTypes = { step: StepNode };
 
@@ -26,28 +29,41 @@ interface FlowBuilderCanvasProps {
 }
 
 function CanvasInner({ steps, selectedStepId, dispatch }: FlowBuilderCanvasProps) {
-  const reactFlowInstance = useReactFlow();
-  const reactFlowWrapper = useRef<HTMLDivElement>(null);
-
-  const { nodes, edges } = useMemo(
+  // Compute layout from steps (source of truth)
+  const layout = useMemo(
     () => layoutSteps(steps, selectedStepId, true),
     [steps, selectedStepId],
   );
+
+  // Use React Flow's own state management so it can track user interactions
+  const [nodes, setNodes, onNodesChange] = useNodesState(layout.nodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(layout.edges);
+
+  // Sync from steps → React Flow state when steps change
+  useEffect(() => {
+    setNodes(layout.nodes);
+    setEdges(layout.edges);
+  }, [layout, setNodes, setEdges]);
 
   const onConnect = useCallback(
     (connection: Connection) => {
       if (!connection.source || !connection.target) return;
       if (connection.source === connection.target) return;
       if (hasCycle(steps, connection.source, connection.target)) return;
+
+      // Update React Flow's internal edge state immediately for visual feedback
+      setEdges((eds) => addEdge({ ...connection, style: { stroke: '#d1d5db', strokeWidth: 2 } }, eds));
+
+      // Update the reducer (source of truth)
       dispatch({
         type: 'ADD_EDGE',
         payload: { sourceStepId: connection.source, targetStepId: connection.target },
       });
     },
-    [steps, dispatch],
+    [steps, dispatch, setEdges],
   );
 
-  const onNodesDelete: OnNodesDelete = useCallback(
+  const handleNodesDelete: OnNodesDelete = useCallback(
     (deleted: Node[]) => {
       for (const node of deleted) {
         dispatch({ type: 'DELETE_STEP', payload: { stepId: node.id } });
@@ -56,7 +72,7 @@ function CanvasInner({ steps, selectedStepId, dispatch }: FlowBuilderCanvasProps
     [dispatch],
   );
 
-  const onEdgesDelete: OnEdgesDelete = useCallback(
+  const handleEdgesDelete: OnEdgesDelete = useCallback(
     (deleted: Edge[]) => {
       for (const edge of deleted) {
         dispatch({
@@ -95,14 +111,16 @@ function CanvasInner({ steps, selectedStepId, dispatch }: FlowBuilderCanvasProps
   );
 
   return (
-    <div ref={reactFlowWrapper} className="flex-1 h-full">
+    <div className="flex-1 h-full">
       <ReactFlow
         nodes={nodes}
         edges={edges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
         nodeTypes={nodeTypes}
         onConnect={onConnect}
-        onNodesDelete={onNodesDelete}
-        onEdgesDelete={onEdgesDelete}
+        onNodesDelete={handleNodesDelete}
+        onEdgesDelete={handleEdgesDelete}
         onNodeClick={onNodeClick}
         onPaneClick={onPaneClick}
         onDragOver={onDragOver}

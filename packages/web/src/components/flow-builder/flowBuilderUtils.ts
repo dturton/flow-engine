@@ -64,35 +64,13 @@ export function layoutSteps(
   return { nodes, edges };
 }
 
+/**
+ * Check if adding an edge from newSource → newTarget would create a cycle.
+ * A cycle exists if newSource is already reachable from newTarget
+ * by following existing forward edges (step → steps that depend on it).
+ */
 export function hasCycle(steps: StepDefinition[], newSource: string, newTarget: string): boolean {
-  const adj = new Map<string, string[]>();
-  for (const step of steps) {
-    adj.set(step.id, [...step.dependsOn]);
-  }
-  // Add the proposed edge: target depends on source
-  const existing = adj.get(newTarget) ?? [];
-  adj.set(newTarget, [...existing, newSource]);
-
-  // DFS from newSource, following reverse direction: if we can reach newSource from newTarget, cycle
-  const visited = new Set<string>();
-  const stack = [newSource];
-  while (stack.length > 0) {
-    const node = stack.pop()!;
-    if (visited.has(node)) continue;
-    visited.add(node);
-    const deps = adj.get(node) ?? [];
-    for (const dep of deps) {
-      if (dep === newSource && node !== newSource) return true;
-      stack.push(dep);
-    }
-  }
-
-  // Alternative: check if we can reach newSource starting from newTarget via dependsOn
-  const visited2 = new Set<string>();
-  const stack2 = [newTarget];
-  // After adding the edge, follow dependsOn from newTarget
-  // Actually, simpler: can we reach newTarget from newSource by following "who depends on me" edges?
-  // Build forward adjacency: step -> steps that depend on it
+  // Build forward adjacency: step → steps that depend on it
   const fwd = new Map<string, string[]>();
   for (const step of steps) {
     for (const dep of step.dependsOn) {
@@ -101,18 +79,17 @@ export function hasCycle(steps: StepDefinition[], newSource: string, newTarget: 
       fwd.set(dep, list);
     }
   }
-  // The new edge means newTarget depends on newSource.
-  // A cycle exists if newSource is reachable from newTarget via forward edges.
-  const stack3 = [newTarget];
-  const visited3 = new Set<string>();
-  while (stack3.length > 0) {
-    const node = stack3.pop()!;
+
+  // DFS: can we reach newSource starting from newTarget via forward edges?
+  const visited = new Set<string>();
+  const stack = [newTarget];
+  while (stack.length > 0) {
+    const node = stack.pop()!;
     if (node === newSource) return true;
-    if (visited3.has(node)) continue;
-    visited3.add(node);
-    const children = fwd.get(node) ?? [];
-    for (const child of children) {
-      stack3.push(child);
+    if (visited.has(node)) continue;
+    visited.add(node);
+    for (const child of fwd.get(node) ?? []) {
+      stack.push(child);
     }
   }
 

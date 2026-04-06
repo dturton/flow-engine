@@ -1,6 +1,9 @@
+import { useState, useEffect } from 'react';
 import CodeEditor from '../CodeEditor.js';
+import { api, type ConnectionSummary } from '../../api.js';
 import InputMappingEditor from './InputMappingEditor.js';
 import { STEP_TYPE_MAP } from './stepTypeConfig.js';
+import { CONNECTORS, CONNECTOR_MAP } from './connectorConfig.js';
 import type {
   FlowBuilderAction,
   StepDefinition,
@@ -101,33 +104,50 @@ export default function StepConfigPanel({ step, allSteps, dispatch }: StepConfig
         {/* Action-specific */}
         {step.type === 'action' && (
           <Section title="Connector">
-            <FieldRow label="Connector Key">
-              <input
-                type="text"
+            <FieldRow label="Connector">
+              <select
                 value={step.connectorKey ?? ''}
-                onChange={(e) => update({ connectorKey: e.target.value })}
-                className={inputClass}
-                placeholder="e.g. http, shopify"
-              />
+                onChange={(e) => {
+                  const key = e.target.value;
+                  const connector = CONNECTOR_MAP[key];
+                  const firstOp = connector?.operations[0]?.id ?? '';
+                  update({ connectorKey: key, operationId: firstOp });
+                }}
+                className={selectClass}
+              >
+                <option value="">Select connector...</option>
+                {CONNECTORS.map((c) => (
+                  <option key={c.key} value={c.key}>
+                    {c.label} — {c.description}
+                  </option>
+                ))}
+              </select>
             </FieldRow>
-            <FieldRow label="Connection ID">
-              <input
-                type="text"
-                value={step.connectionId ?? ''}
-                onChange={(e) => update({ connectionId: e.target.value })}
-                className={inputClass}
-                placeholder="Optional credential reference"
-              />
-            </FieldRow>
-            <FieldRow label="Operation ID">
-              <input
-                type="text"
-                value={step.operationId ?? ''}
-                onChange={(e) => update({ operationId: e.target.value })}
-                className={inputClass}
-                placeholder="e.g. request, products.list"
-              />
-            </FieldRow>
+            {step.connectorKey && CONNECTOR_MAP[step.connectorKey] && (
+              <>
+                <FieldRow label="Operation">
+                  <select
+                    value={step.operationId ?? ''}
+                    onChange={(e) => update({ operationId: e.target.value })}
+                    className={selectClass}
+                  >
+                    <option value="">Select operation...</option>
+                    {CONNECTOR_MAP[step.connectorKey].operations.map((op) => (
+                      <option key={op.id} value={op.id}>
+                        {op.label}
+                      </option>
+                    ))}
+                  </select>
+                </FieldRow>
+                {CONNECTOR_MAP[step.connectorKey].requiresConnection && (
+                  <ConnectionPicker
+                    connectorKey={step.connectorKey}
+                    value={step.connectionId ?? ''}
+                    onChange={(connectionId) => update({ connectionId })}
+                  />
+                )}
+              </>
+            )}
             <RetryPolicyEditor
               policy={step.retryPolicy}
               onChange={(retryPolicy) => update({ retryPolicy })}
@@ -300,6 +320,55 @@ function BranchEditor({
         + Add branch
       </button>
     </div>
+  );
+}
+
+function ConnectionPicker({
+  connectorKey,
+  value,
+  onChange,
+}: {
+  connectorKey: string;
+  value: string;
+  onChange: (connectionId: string) => void;
+}) {
+  const [connections, setConnections] = useState<ConnectionSummary[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    setLoading(true);
+    api.listConnections('demo-tenant', connectorKey)
+      .then(setConnections)
+      .catch(() => setConnections([]))
+      .finally(() => setLoading(false));
+  }, [connectorKey]);
+
+  return (
+    <FieldRow label="Connection">
+      {loading ? (
+        <p className="text-xs text-gray-400">Loading...</p>
+      ) : connections.length === 0 ? (
+        <div className="text-xs text-gray-400">
+          No connections found.{' '}
+          <a href="/connections" target="_blank" className="text-blue-600 hover:text-blue-800">
+            Create one
+          </a>
+        </div>
+      ) : (
+        <select
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className={selectClass}
+        >
+          <option value="">Select connection...</option>
+          {connections.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+      )}
+    </FieldRow>
   );
 }
 

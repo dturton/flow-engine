@@ -73,6 +73,19 @@ export interface WebhookSummary {
   updatedAt: string;
 }
 
+/** Connection as returned by the API (credentials masked as ****) */
+export interface ConnectionSummary {
+  id: string;
+  tenantId: string;
+  connectorKey: string;
+  name: string;
+  description?: string;
+  credentials: Record<string, string>;
+  config: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
 /** Typed API client with methods for each REST endpoint */
 export const api = {
   /** Fetch all flow definitions */
@@ -109,4 +122,21 @@ export const api = {
   deleteWebhook: (id: string) => request<void>(`/webhooks/${id}`, { method: 'DELETE' }),
   /** Fetch the most recent runs across all flows */
   listRecentRuns: (limit?: number) => request<FlowRunSummary[]>(`/runs${limit ? `?limit=${limit}` : ''}`),
+  /** List connections for a tenant, optionally filtered by connector key */
+  listConnections: (tenantId: string, connectorKey?: string) => {
+    const params = new URLSearchParams({ tenantId });
+    if (connectorKey) params.set('connectorKey', connectorKey);
+    return request<ConnectionSummary[]>(`/connections?${params}`);
+  },
+  /** Create a new connection */
+  createConnection: (data: {
+    tenantId: string;
+    connectorKey: string;
+    name: string;
+    description?: string;
+    credentials: Record<string, unknown>;
+    config?: Record<string, unknown>;
+  }) => request<ConnectionSummary>('/connections', { method: 'POST', body: JSON.stringify(data) }),
+  /** Delete a connection */
+  deleteConnection: (id: string) => request<void>(`/connections/${id}`, { method: 'DELETE' }),
 };

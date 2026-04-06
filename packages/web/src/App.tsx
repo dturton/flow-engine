@@ -9,6 +9,7 @@ import FlowList from './pages/FlowList.js';
 import FlowDetail from './pages/FlowDetail.js';
 import RunDetail from './pages/RunDetail.js';
 import CreateFlow from './pages/CreateFlow.js';
+import Connections from './pages/Connections.js';
 
 /** Top-level layout with navigation and route outlet */
 export default function App() {
@@ -24,6 +25,9 @@ export default function App() {
         <Link to="/flows" className="text-sm text-gray-600 hover:text-gray-900">
           Flows
         </Link>
+        <Link to="/connections" className="text-sm text-gray-600 hover:text-gray-900">
+          Connections
+        </Link>
       </nav>
       <main className="max-w-7xl mx-auto px-6 py-8">
         <Routes>
@@ -32,6 +36,7 @@ export default function App() {
           <Route path="/flows/new" element={<CreateFlow />} />
           <Route path="/flows/:flowId" element={<FlowDetail />} />
           <Route path="/flows/:flowId/edit" element={<CreateFlow />} />
+          <Route path="/connections" element={<Connections />} />
           <Route path="/runs/:runId" element={<RunDetail />} />
         </Routes>
       </main>

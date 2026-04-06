@@ -42,7 +42,7 @@ export default function StepNode({ data, selected }: NodeProps) {
       style={{ width: 180 }}
     >
       {/* Incoming edge connection point (dependencies flow into this step) */}
-      <Handle type="target" position={Position.Top} className="!bg-gray-400 !w-2 !h-2" />
+      <Handle type="target" position={Position.Top} className={d.builderMode ? '!bg-blue-400 !w-3 !h-3 !-top-1.5 hover:!bg-blue-600 hover:!w-4 hover:!h-4 !transition-all' : '!bg-gray-400 !w-2 !h-2'} />
 
       {/* Step name — truncated if too long for the node width */}
       <div className="text-sm font-medium text-gray-800 truncate">{d.label}</div>
@@ -63,7 +63,7 @@ export default function StepNode({ data, selected }: NodeProps) {
       </div>
 
       {/* Outgoing edge connection point (dependent steps connect from here) */}
-      <Handle type="source" position={Position.Bottom} className="!bg-gray-400 !w-2 !h-2" />
+      <Handle type="source" position={Position.Bottom} className={d.builderMode ? '!bg-blue-400 !w-3 !h-3 !-bottom-1.5 hover:!bg-blue-600 hover:!w-4 hover:!h-4 !transition-all' : '!bg-gray-400 !w-2 !h-2'} />
     </div>
   );
 }

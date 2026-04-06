@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import type { MappingExpression, StepDefinition } from './useFlowBuilderState.js';
 
 const EXPRESSION_TYPES: MappingExpression['type'][] = ['literal', 'jsonata', 'jsonpath', 'template'];
@@ -7,9 +7,7 @@ interface InputMappingEditorProps {
   mapping: Record<string, MappingExpression | string>;
   onChange: (mapping: Record<string, MappingExpression | string>) => void;
   excludeKeys?: string[];
-  /** Current step being edited — used to compute available upstream paths */
   currentStep?: StepDefinition;
-  /** All steps in the flow — used to resolve transitive dependencies */
   allSteps?: StepDefinition[];
 }
 
@@ -33,95 +31,168 @@ function getUpstreamStepIds(stepId: string, allSteps: StepDefinition[]): string[
   return Array.from(visited);
 }
 
-interface PathSuggestion {
+// ─── Autocomplete tree ────────────────────────────────────────────────────────
+
+interface CompletionItem {
+  /** Text to insert */
+  value: string;
+  /** Display label */
   label: string;
-  path: string;
-  description: string;
+  /** Optional description shown next to label */
+  hint?: string;
 }
 
-function buildSuggestions(
+/**
+ * Build a virtual path tree for autocompletion.
+ * Given the current typed path prefix, returns the next-level completions.
+ *
+ * Tree structure:
+ *   trigger
+ *     data  → (leaf — user continues with their own keys)
+ *   steps
+ *     <stepId>  (for each upstream step)
+ *       data  → (leaf)
+ *   variables → (leaf)
+ */
+function getCompletions(
+  typedPath: string,
   exprType: MappingExpression['type'],
-  currentStep: StepDefinition,
-  allSteps: StepDefinition[],
-): PathSuggestion[] {
-  if (exprType === 'literal') return [];
+  currentStep: StepDefinition | undefined,
+  allSteps: StepDefinition[] | undefined,
+): CompletionItem[] {
+  if (!currentStep || !allSteps || exprType === 'literal') return [];
 
   const upstreamIds = getUpstreamStepIds(currentStep.id, allSteps);
   const stepMap = new Map(allSteps.map((s) => [s.id, s]));
-  const suggestions: PathSuggestion[] = [];
 
-  const fmt = (basePath: string) => {
-    switch (exprType) {
-      case 'jsonpath': return `$.${basePath}`;
-      case 'jsonata': return basePath;
-      case 'template': return `{{${basePath}}}`;
-      default: return basePath;
-    }
-  };
-
-  // Trigger paths — always available
-  suggestions.push({
-    label: 'trigger.data',
-    path: fmt('trigger.data'),
-    description: 'Trigger payload',
-  });
-
-  // Upstream step paths
-  for (const id of upstreamIds) {
-    const step = stepMap.get(id);
-    if (!step) continue;
-    suggestions.push({
-      label: `${step.name}`,
-      path: fmt(`steps.${id}.data`),
-      description: `Output of "${step.name}"`,
-    });
+  // Normalize the typed value to a bare dot-path for tree traversal
+  let bare = typedPath;
+  if (exprType === 'jsonpath') {
+    // Strip leading $. or $
+    bare = bare.replace(/^\$\.?/, '');
+  } else if (exprType === 'template') {
+    // Extract path from inside {{ }}
+    const match = bare.match(/\{\{(.*)$/);
+    bare = match ? match[1] : bare;
   }
 
-  // Also suggest steps not in dependsOn (greyed out hint)
-  // Skip — only suggest reachable steps to avoid runtime errors
+  const parts = bare.split('.');
+  // The last part is what the user is currently typing (partial match)
+  const partial = parts.pop() ?? '';
+  const resolved = parts; // fully typed segments
 
-  return suggestions;
+  // Build the tree nodes at the current level
+  type TreeNode = { children?: Record<string, { hint?: string; children?: Record<string, { hint?: string }> }>, hint?: string };
+
+  const stepsChildren: Record<string, { hint?: string; children?: Record<string, { hint?: string }> }> = {};
+  for (const id of upstreamIds) {
+    const step = stepMap.get(id);
+    stepsChildren[id] = {
+      hint: step ? step.name : id,
+      children: {
+        data: { hint: 'step output' },
+      },
+    };
+  }
+
+  const tree: Record<string, TreeNode> = {
+    trigger: {
+      hint: 'trigger payload',
+      children: {
+        type: { hint: 'trigger type' },
+        data: { hint: 'trigger data' },
+      },
+    },
+    steps: {
+      hint: `${upstreamIds.length} upstream step(s)`,
+      children: stepsChildren,
+    },
+    variables: {
+      hint: 'flow variables',
+    },
+  };
+
+  // Walk into the tree following resolved segments
+  let current: Record<string, TreeNode> | undefined = tree;
+  for (const segment of resolved) {
+    const node = current?.[segment];
+    if (!node || !node.children) {
+      // Past a leaf — no more completions
+      return [];
+    }
+    current = node.children as Record<string, TreeNode>;
+  }
+
+  if (!current) return [];
+
+  // Filter children by partial match
+  const candidates = Object.entries(current)
+    .filter(([key]) => key.toLowerCase().startsWith(partial.toLowerCase()))
+    .map(([key, node]) => {
+      // Build the full path to insert
+      const fullSegments = [...resolved, key];
+      let insertPath: string;
+      switch (exprType) {
+        case 'jsonpath':
+          insertPath = `$.${fullSegments.join('.')}`;
+          break;
+        case 'template':
+          insertPath = `{{${fullSegments.join('.')}}}`;
+          break;
+        default:
+          insertPath = fullSegments.join('.');
+          break;
+      }
+
+      return {
+        value: insertPath,
+        label: key,
+        hint: (node as TreeNode).hint,
+      };
+    });
+
+  return candidates;
 }
 
-function PathSuggestionsPanel({
-  suggestions,
+// ─── Autocomplete dropdown ────────────────────────────────────────────────────
+
+function AutocompleteDropdown({
+  items,
+  selectedIndex,
   onSelect,
-  currentValue,
 }: {
-  suggestions: PathSuggestion[];
-  onSelect: (path: string) => void;
-  currentValue: string;
+  items: CompletionItem[];
+  selectedIndex: number;
+  onSelect: (item: CompletionItem) => void;
 }) {
-  if (suggestions.length === 0) return null;
-
-  // Filter suggestions that match what the user is typing
-  const filtered = currentValue
-    ? suggestions.filter(
-        (s) =>
-          s.path.toLowerCase().includes(currentValue.toLowerCase()) ||
-          s.label.toLowerCase().includes(currentValue.toLowerCase()),
-      )
-    : suggestions;
-
-  if (filtered.length === 0 && currentValue) return null;
-
-  const items = currentValue ? filtered : suggestions;
+  if (items.length === 0) return null;
 
   return (
-    <div className="flex flex-wrap gap-1 mt-1">
-      {items.map((s) => (
+    <div className="absolute left-0 right-0 top-full z-10 mt-0.5 bg-white border border-gray-300 rounded-lg shadow-lg overflow-hidden max-h-48 overflow-y-auto">
+      {items.map((item, idx) => (
         <button
-          key={s.path}
-          onClick={() => onSelect(s.path)}
-          title={s.description}
-          className="text-[10px] font-mono px-1.5 py-0.5 rounded border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:border-blue-300 transition-colors truncate max-w-[200px]"
+          key={item.value}
+          onMouseDown={(e) => {
+            e.preventDefault(); // prevent blur
+            onSelect(item);
+          }}
+          className={`w-full text-left px-2.5 py-1.5 flex items-center justify-between text-xs ${
+            idx === selectedIndex
+              ? 'bg-blue-50 text-blue-800'
+              : 'text-gray-700 hover:bg-gray-50'
+          }`}
         >
-          {s.path}
+          <span className="font-mono font-medium">{item.label}</span>
+          {item.hint && (
+            <span className="text-[10px] text-gray-400 ml-2 truncate">{item.hint}</span>
+          )}
         </button>
       ))}
     </div>
   );
 }
+
+// ─── Main component ───────────────────────────────────────────────────────────
 
 export default function InputMappingEditor({
   mapping,
@@ -131,7 +202,6 @@ export default function InputMappingEditor({
   allSteps,
 }: InputMappingEditorProps) {
   const entries = Object.entries(mapping).filter(([k]) => !excludeKeys.includes(k));
-  const [focusedKey, setFocusedKey] = useState<string | null>(null);
 
   const update = (oldKey: string, newKey: string, expr: MappingExpression) => {
     const next = { ...mapping };
@@ -176,9 +246,6 @@ export default function InputMappingEditor({
             key={key}
             entryKey={key}
             expr={expr}
-            isFocused={focusedKey === key}
-            onFocus={() => setFocusedKey(key)}
-            onBlur={() => setTimeout(() => setFocusedKey(null), 150)}
             onUpdate={(newKey, newExpr) => update(key, newKey, newExpr)}
             onRemove={() => remove(key)}
             currentStep={currentStep}
@@ -193,9 +260,6 @@ export default function InputMappingEditor({
 function MappingEntry({
   entryKey,
   expr,
-  isFocused,
-  onFocus,
-  onBlur,
   onUpdate,
   onRemove,
   currentStep,
@@ -203,20 +267,57 @@ function MappingEntry({
 }: {
   entryKey: string;
   expr: MappingExpression;
-  isFocused: boolean;
-  onFocus: () => void;
-  onBlur: () => void;
   onUpdate: (key: string, expr: MappingExpression) => void;
   onRemove: () => void;
   currentStep?: StepDefinition;
   allSteps?: StepDefinition[];
 }) {
-  const suggestions = useMemo(() => {
-    if (!currentStep || !allSteps) return [];
-    return buildSuggestions(expr.type, currentStep, allSteps);
-  }, [expr.type, currentStep, allSteps]);
+  const [isFocused, setIsFocused] = useState(false);
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const showSuggestions = isFocused && suggestions.length > 0 && expr.type !== 'literal';
+  const completions = useMemo(
+    () => getCompletions(expr.value, expr.type, currentStep, allSteps),
+    [expr.value, expr.type, currentStep, allSteps],
+  );
+
+  const showDropdown = isFocused && completions.length > 0;
+
+  // Reset selection when completions change
+  useEffect(() => {
+    setSelectedIndex(0);
+  }, [completions]);
+
+  const selectCompletion = useCallback(
+    (item: CompletionItem) => {
+      onUpdate(entryKey, { ...expr, value: item.value });
+      // Keep focus on the textarea
+      textareaRef.current?.focus();
+    },
+    [entryKey, expr, onUpdate],
+  );
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (!showDropdown) return;
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSelectedIndex((i) => Math.min(i + 1, completions.length - 1));
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSelectedIndex((i) => Math.max(i - 1, 0));
+      } else if (e.key === 'Tab' || e.key === 'Enter') {
+        if (completions[selectedIndex]) {
+          e.preventDefault();
+          selectCompletion(completions[selectedIndex]);
+        }
+      } else if (e.key === 'Escape') {
+        setIsFocused(false);
+      }
+    },
+    [showDropdown, completions, selectedIndex, selectCompletion],
+  );
 
   return (
     <div className="bg-gray-50 rounded-lg p-2 space-y-1.5">
@@ -249,22 +350,36 @@ function MappingEntry({
           &times;
         </button>
       </div>
-      <textarea
-        value={expr.value}
-        onChange={(e) => onUpdate(entryKey, { ...expr, value: e.target.value })}
-        onFocus={onFocus}
-        onBlur={onBlur}
-        rows={expr.value.includes('\n') ? 3 : 1}
-        className="w-full text-xs font-mono border border-gray-300 rounded px-2 py-1 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 resize-y"
-        placeholder={expr.type === 'literal' ? 'Value' : `${expr.type} expression...`}
-      />
-      {showSuggestions && (
-        <PathSuggestionsPanel
-          suggestions={suggestions}
-          currentValue={expr.value}
-          onSelect={(path) => onUpdate(entryKey, { ...expr, value: path })}
+      <div className="relative">
+        <textarea
+          ref={textareaRef}
+          value={expr.value}
+          onChange={(e) => onUpdate(entryKey, { ...expr, value: e.target.value })}
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => setTimeout(() => setIsFocused(false), 200)}
+          onKeyDown={handleKeyDown}
+          rows={expr.value.includes('\n') ? 3 : 1}
+          className="w-full text-xs font-mono border border-gray-300 rounded px-2 py-1 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 resize-y"
+          placeholder={
+            expr.type === 'literal'
+              ? 'Value'
+              : expr.type === 'jsonpath'
+                ? 'Type $. to see available paths'
+                : expr.type === 'jsonata'
+                  ? 'Type to see available paths'
+                  : expr.type === 'template'
+                    ? 'Type {{ to see available paths'
+                    : `${expr.type} expression...`
+          }
         />
-      )}
+        {showDropdown && (
+          <AutocompleteDropdown
+            items={completions}
+            selectedIndex={selectedIndex}
+            onSelect={selectCompletion}
+          />
+        )}
+      </div>
     </div>
   );
 }
