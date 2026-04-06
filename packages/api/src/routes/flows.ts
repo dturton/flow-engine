@@ -95,14 +95,24 @@ export async function flowRoutes(app: FastifyInstance, deps: AppDeps): Promise<v
     return reply.send(updated);
   });
 
-  /** DELETE /api/flows/:flowId — remove a flow definition. */
+  /** DELETE /api/flows/:flowId — remove a flow definition and all associated data. */
   app.delete('/api/flows/:flowId', async (request, reply) => {
     const { flowId } = request.params as { flowId: string };
     const existing = await deps.flowRepository.findById(flowId);
     if (!existing) {
       return reply.status(404).send({ error: 'Flow not found' });
     }
-    await deps.flowRepository.delete(flowId);
+
+    // Delete step runs, flow runs, webhooks, then the flow itself
+    await deps.prisma.$transaction(async (tx: any) => {
+      await tx.stepRun.deleteMany({
+        where: { flowRun: { flowId } },
+      });
+      await tx.flowRun.deleteMany({ where: { flowId } });
+      await tx.webhook.deleteMany({ where: { flowId } });
+      await tx.flowDefinition.delete({ where: { id: flowId } });
+    });
+
     return reply.status(204).send();
   });
 

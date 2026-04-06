@@ -206,6 +206,8 @@ export default function StepConfigPanel({ step, allSteps, dispatch }: StepConfig
           mapping={step.inputMapping}
           onChange={(inputMapping) => update({ inputMapping })}
           excludeKeys={step.type === 'script' ? ['script'] : step.type === 'delay' ? ['delayMs'] : []}
+          currentStep={step}
+          allSteps={allSteps}
         />
 
         {/* Advanced options */}

@@ -8,8 +8,10 @@ const BASE = '/api';
 
 /** Generic fetch wrapper that prepends the base path, sets JSON headers, and throws on non-OK responses */
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers: Record<string, string> = {};
+  if (init?.body) headers['Content-Type'] = 'application/json';
   const res = await fetch(`${BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     ...init,
   });
   if (!res.ok) {
