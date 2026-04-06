@@ -1,5 +1,11 @@
 export type StepType = 'action' | 'transform' | 'branch' | 'loop' | 'delay' | 'script';
 
+export interface FlowFunction {
+  name: string;
+  params: string[];
+  body: string;
+}
+
 export interface MappingExpression {
   type: 'jsonpath' | 'jsonata' | 'literal' | 'template';
   value: string;
@@ -47,6 +53,7 @@ export interface FlowDefinition {
   description?: string;
   tenantId: string;
   steps: StepDefinition[];
+  functions?: FlowFunction[];
   errorPolicy: FlowErrorPolicy;
   tags?: string[];
   createdAt: Date;

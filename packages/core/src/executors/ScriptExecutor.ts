@@ -38,8 +38,15 @@ export class ScriptExecutor implements StepExecutor {
       globalThis: undefined,
     };
 
+    // Prepend flow-level function declarations so scripts can call them
+    const fnDefs = input.flowFunctions ?? [];
+    const preamble = fnDefs
+      .map(fn => `function ${fn.name}(${fn.params.join(', ')}) { ${fn.body} }`)
+      .join('\n');
+    const fullScript = preamble ? preamble + '\n' + script : script;
+
     const vmContext = vm.createContext(sandbox);
-    const vmScript = new vm.Script(script, { filename: `step-${step.id}.js` });
+    const vmScript = new vm.Script(fullScript, { filename: `step-${step.id}.js` });
 
     vmScript.runInContext(vmContext, { timeout: SCRIPT_TIMEOUT_MS });
 

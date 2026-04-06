@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { ScriptExecutor } from '../../src/executors/ScriptExecutor.js';
 import type { StepExecutionInput } from '../../src/engine/StepExecutor.js';
-import type { StepDefinition } from '../../src/types/flow.js';
+import type { StepDefinition, FlowFunction } from '../../src/types/flow.js';
 import type { FlowContext } from '../../src/types/run.js';
 
 function makeContext(): FlowContext {
@@ -138,5 +138,95 @@ describe('ScriptExecutor', () => {
     const script = 'output = {};';
     const result = await executor.execute(makeInput(script));
     expect(result.durationMs).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe('ScriptExecutor — flow functions', () => {
+  const executor = new ScriptExecutor();
+
+  function makeInputWithFunctions(
+    script: string,
+    flowFunctions: FlowFunction[],
+    overrides: Partial<StepExecutionInput> = {}
+  ): StepExecutionInput {
+    return {
+      step: makeStep(),
+      resolvedInputs: { script },
+      context: makeContext(),
+      attempt: 1,
+      flowFunctions,
+      ...overrides,
+    };
+  }
+
+  it('script can call a flow-level function', async () => {
+    const fns: FlowFunction[] = [
+      { name: 'double', params: ['x'], body: 'return x * 2;' },
+    ];
+    const script = 'output = { result: double(21) };';
+    const result = await executor.execute(makeInputWithFunctions(script, fns));
+    expect(result.output).toEqual({ result: 42 });
+  });
+
+  it('script can call multiple flow-level functions', async () => {
+    const fns: FlowFunction[] = [
+      { name: 'add', params: ['a', 'b'], body: 'return a + b;' },
+      { name: 'mul', params: ['a', 'b'], body: 'return a * b;' },
+    ];
+    const script = 'output = { result: mul(add(2, 3), 4) };';
+    const result = await executor.execute(makeInputWithFunctions(script, fns));
+    expect(result.output).toEqual({ result: 20 });
+  });
+
+  it('flow functions can call each other', async () => {
+    const fns: FlowFunction[] = [
+      { name: 'square', params: ['x'], body: 'return x * x;' },
+      { name: 'sumOfSquares', params: ['a', 'b'], body: 'return square(a) + square(b);' },
+    ];
+    const script = 'output = { result: sumOfSquares(3, 4) };';
+    const result = await executor.execute(makeInputWithFunctions(script, fns));
+    expect(result.output).toEqual({ result: 25 });
+  });
+
+  it('flow functions can access sandbox inputs', async () => {
+    const fns: FlowFunction[] = [
+      { name: 'greet', params: [], body: 'return "Hello " + inputs.name;' },
+    ];
+    const script = 'output = { message: greet() };';
+    const result = await executor.execute(
+      makeInputWithFunctions(script, fns, {
+        resolvedInputs: { script, name: 'World' },
+      })
+    );
+    expect(result.output).toEqual({ message: 'Hello World' });
+  });
+
+  it('flow functions cannot access require or process', async () => {
+    const fns: FlowFunction[] = [
+      { name: 'checkAccess', params: [], body: 'return { hasRequire: typeof require, hasProcess: typeof process };' },
+    ];
+    const script = 'output = checkAccess();';
+    const result = await executor.execute(makeInputWithFunctions(script, fns));
+    expect(result.output).toEqual({ hasRequire: 'undefined', hasProcess: 'undefined' });
+  });
+
+  it('throws on function with syntax error in body', async () => {
+    const fns: FlowFunction[] = [
+      { name: 'broken', params: [], body: 'return {{{;' },
+    ];
+    const script = 'output = broken();';
+    await expect(executor.execute(makeInputWithFunctions(script, fns))).rejects.toThrow();
+  });
+
+  it('works with empty flowFunctions array', async () => {
+    const script = 'output = { ok: true };';
+    const result = await executor.execute(makeInputWithFunctions(script, []));
+    expect(result.output).toEqual({ ok: true });
+  });
+
+  it('works when flowFunctions is undefined', async () => {
+    const script = 'output = { ok: true };';
+    const result = await executor.execute(makeInput(script));
+    expect(result.output).toEqual({ ok: true });
   });
 });

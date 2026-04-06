@@ -103,6 +103,51 @@ export class DagResolver {
       }
     }
 
+    // Validate flow functions
+    if (flow.functions) {
+      const fnNames = new Set<string>();
+      const reservedNames = new Set(['inputs', 'context', 'output', 'console']);
+      const identifierPattern = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/;
+
+      for (const fn of flow.functions) {
+        if (!identifierPattern.test(fn.name)) {
+          issues.push({
+            severity: 'error',
+            message: `Function name "${fn.name}" is not a valid JavaScript identifier`,
+          });
+        }
+        if (reservedNames.has(fn.name)) {
+          issues.push({
+            severity: 'error',
+            message: `Function name "${fn.name}" conflicts with a reserved sandbox variable`,
+          });
+        }
+        if (fnNames.has(fn.name)) {
+          issues.push({
+            severity: 'error',
+            message: `Duplicate function name: "${fn.name}"`,
+          });
+        }
+        fnNames.add(fn.name);
+
+        for (const param of fn.params) {
+          if (!identifierPattern.test(param)) {
+            issues.push({
+              severity: 'error',
+              message: `Parameter "${param}" in function "${fn.name}" is not a valid JavaScript identifier`,
+            });
+          }
+        }
+
+        if (!fn.body || fn.body.trim().length === 0) {
+          issues.push({
+            severity: 'warning',
+            message: `Function "${fn.name}" has an empty body`,
+          });
+        }
+      }
+    }
+
     // Check cycles
     const adj = this.buildAdjacency(flow.steps);
     const cycles = this.detectCycles(adj);

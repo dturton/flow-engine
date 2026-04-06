@@ -21,6 +21,7 @@ export interface FlowSummary {
   description?: string;
   tags?: string[];
   steps: { id: string; name: string; type: string; dependsOn: string[] }[];
+  functions?: { name: string; params: string[]; body: string }[];
   errorPolicy: { onStepFailure: string; errorStepId?: string };
   createdAt: string;
   updatedAt: string;

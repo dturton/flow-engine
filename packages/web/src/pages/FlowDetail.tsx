@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { api, type FlowSummary, type FlowRunSummary } from '../api.js';
 import StatusBadge from '../components/StatusBadge.js';
+import FunctionEditor from '../components/FunctionEditor.js';
 
 export default function FlowDetail() {
   const { flowId } = useParams<{ flowId: string }>();
@@ -99,6 +100,20 @@ export default function FlowDetail() {
           </table>
         </div>
       </section>
+
+      {/* Functions */}
+      {flow.functions && flow.functions.length > 0 && (
+        <section className="mb-8">
+          <h2 className="text-lg font-semibold mb-3">Functions ({flow.functions.length})</h2>
+          <div className="bg-white rounded-lg shadow p-4">
+            <FunctionEditor
+              functions={flow.functions}
+              onChange={() => {}}
+              readOnly
+            />
+          </div>
+        </section>
+      )}
 
       {/* Runs */}
       <section>

@@ -128,7 +128,7 @@ export class FlowEngine {
       const context = await this.contextStore.get(run.id);
 
       const results = await Promise.allSettled(
-        batch.map((step) => this.executeStep(run, step, context))
+        batch.map((step) => this.executeStep(run, flow, step, context))
       );
 
       for (let i = 0; i < results.length; i++) {
@@ -211,6 +211,7 @@ export class FlowEngine {
 
   private async executeStep(
     run: FlowRun,
+    flow: FlowDefinition,
     step: StepDefinition,
     context: FlowContext
   ): Promise<StepRun> {
@@ -245,6 +246,7 @@ export class FlowEngine {
           context: freshContext,
           attempt,
           tenantId: run.tenantId,
+          flowFunctions: flow.functions,
         });
 
         const timeoutPromise = new Promise<never>((_resolve, reject) => {

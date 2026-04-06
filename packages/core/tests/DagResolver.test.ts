@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { DagResolver } from '../src/engine/DagResolver.js';
 import { FlowValidationError } from '../src/errors.js';
-import type { FlowDefinition, StepDefinition } from '../src/types/flow.js';
+import type { FlowDefinition, StepDefinition, FlowFunction } from '../src/types/flow.js';
 
 function makeFlow(steps: Partial<StepDefinition>[]): FlowDefinition {
   return {
@@ -94,5 +94,75 @@ describe('DagResolver', () => {
     expect(graph.nodes.get('A')!.depth).toBe(0);
     expect(graph.nodes.get('A')!.dependencies.size).toBe(0);
     expect(graph.nodes.get('A')!.dependents.size).toBe(0);
+  });
+
+  // ── Flow function validation ────────────────────────────────────────────
+
+  function makeFlowWithFunctions(functions: FlowFunction[]): FlowDefinition {
+    return {
+      ...makeFlow([{ id: 'A', dependsOn: [] }]),
+      functions,
+    };
+  }
+
+  it('accepts valid flow functions without errors', () => {
+    const flow = makeFlowWithFunctions([
+      { name: 'add', params: ['a', 'b'], body: 'return a + b;' },
+    ]);
+    const issues = resolver.validate(flow);
+    expect(issues.filter(i => i.severity === 'error')).toHaveLength(0);
+  });
+
+  it('rejects a function name that is not a valid JS identifier', () => {
+    const flow = makeFlowWithFunctions([
+      { name: '123bad', params: [], body: 'return 1;' },
+    ]);
+    const issues = resolver.validate(flow);
+    expect(issues).toContainEqual(
+      expect.objectContaining({ severity: 'error', message: expect.stringContaining('123bad') })
+    );
+  });
+
+  it('rejects duplicate function names', () => {
+    const flow = makeFlowWithFunctions([
+      { name: 'dup', params: [], body: 'return 1;' },
+      { name: 'dup', params: [], body: 'return 2;' },
+    ]);
+    const issues = resolver.validate(flow);
+    expect(issues).toContainEqual(
+      expect.objectContaining({ severity: 'error', message: expect.stringContaining('Duplicate function name') })
+    );
+  });
+
+  it('rejects function names that conflict with sandbox reserved names', () => {
+    for (const reserved of ['inputs', 'context', 'output', 'console']) {
+      const flow = makeFlowWithFunctions([
+        { name: reserved, params: [], body: 'return 1;' },
+      ]);
+      const issues = resolver.validate(flow);
+      expect(issues).toContainEqual(
+        expect.objectContaining({ severity: 'error', message: expect.stringContaining('conflicts with a reserved') })
+      );
+    }
+  });
+
+  it('rejects invalid parameter names', () => {
+    const flow = makeFlowWithFunctions([
+      { name: 'fn', params: ['valid', '1invalid'], body: 'return 1;' },
+    ]);
+    const issues = resolver.validate(flow);
+    expect(issues).toContainEqual(
+      expect.objectContaining({ severity: 'error', message: expect.stringContaining('1invalid') })
+    );
+  });
+
+  it('warns on empty function body', () => {
+    const flow = makeFlowWithFunctions([
+      { name: 'empty', params: [], body: '' },
+    ]);
+    const issues = resolver.validate(flow);
+    expect(issues).toContainEqual(
+      expect.objectContaining({ severity: 'warning', message: expect.stringContaining('empty body') })
+    );
   });
 });

@@ -1,6 +1,6 @@
 import jsonata from 'jsonata';
 import { JSONPath } from 'jsonpath-plus';
-import type { StepType, StepDefinition, MappingExpression } from '../types/flow.js';
+import type { StepType, StepDefinition, MappingExpression, FlowFunction } from '../types/flow.js';
 import type { FlowContext, LogEntry } from '../types/run.js';
 import type { ValidationIssue } from './DagResolver.js';
 
@@ -10,6 +10,7 @@ export interface StepExecutionInput {
   context: FlowContext;
   attempt: number;
   tenantId: string;
+  flowFunctions?: FlowFunction[];
 }
 
 export interface StepExecutionResult {
