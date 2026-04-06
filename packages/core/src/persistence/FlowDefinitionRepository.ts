@@ -1,6 +1,13 @@
+/**
+ * Persistence layer for flow definitions. Wraps Prisma CRUD operations and
+ * converts between the Prisma row format and the domain {@link FlowDefinition} type.
+ * Automatically increments the version on each update.
+ */
+
 import type { PrismaClient, Prisma } from '../generated/prisma/client.js';
 import type { FlowDefinition } from '../types/flow.js';
 
+/** Repository for creating, reading, updating, and deleting flow definitions. */
 export class FlowDefinitionRepository {
   constructor(private prisma: PrismaClient) {}
 

@@ -1,3 +1,10 @@
+/**
+ * Create / Edit flow page.
+ * Serves dual duty: when navigated to via /flows/new it creates a new flow,
+ * when via /flows/:flowId/edit it loads the existing definition for editing.
+ * Has two tabs: a JSON definition editor and a visual function editor.
+ */
+
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { api } from '../api.js';
@@ -23,6 +30,7 @@ const EXAMPLE_FLOW = JSON.stringify({
 
 type Tab = 'definition' | 'functions';
 
+/** Tabbed form for creating or editing a flow definition with optional custom functions */
 export default function CreateFlow() {
   const navigate = useNavigate();
   const { flowId } = useParams<{ flowId: string }>();

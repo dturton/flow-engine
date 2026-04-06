@@ -1,26 +1,43 @@
+/**
+ * DAG validation and resolution for flow definitions. Validates structural
+ * integrity (duplicate IDs, missing dependencies, cycles, function definitions)
+ * and produces an {@link ExecutionGraph} with topological ordering and depth metadata.
+ */
+
 import type { FlowDefinition, StepDefinition } from '../types/flow.js';
 import { FlowValidationError } from '../errors.js';
 
+/** A node in the execution graph, tracking its depth and adjacency sets. */
 export interface ExecutionNode {
   stepId: string;
+  /** BFS depth from the nearest root — used for scheduling priority. */
   depth: number;
   dependencies: Set<string>;
   dependents: Set<string>;
 }
 
+/** The resolved execution graph produced by {@link DagResolver.resolve}. */
 export interface ExecutionGraph {
   nodes: Map<string, ExecutionNode>;
+  /** Step IDs with no dependencies (entry points). */
   roots: string[];
+  /** Topologically sorted step IDs — safe execution order. */
   sortedOrder: string[];
 }
 
+/** A validation finding — errors block execution, warnings are informational. */
 export interface ValidationIssue {
   stepId?: string;
   severity: 'error' | 'warning';
   message: string;
 }
 
+/**
+ * Validates a flow definition for structural correctness and resolves it into
+ * an {@link ExecutionGraph} that the engine uses to schedule step execution.
+ */
 export class DagResolver {
+  /** Validates the flow and builds the execution graph. Throws on validation errors. */
   resolve(flow: FlowDefinition): ExecutionGraph {
     const issues = this.validate(flow);
     const errors = issues.filter((i) => i.severity === 'error');
@@ -73,6 +90,7 @@ export class DagResolver {
     return { nodes, roots, sortedOrder };
   }
 
+  /** Checks for duplicate IDs, missing dependency references, invalid functions, and cycles. */
   validate(flow: FlowDefinition): ValidationIssue[] {
     const issues: ValidationIssue[] = [];
     const stepIds = new Set(flow.steps.map((s) => s.id));
@@ -161,6 +179,7 @@ export class DagResolver {
     return issues;
   }
 
+  /** Builds a forward adjacency list (dependency -> dependents) from step definitions. */
   private buildAdjacency(steps: StepDefinition[]): Map<string, Set<string>> {
     const adj = new Map<string, Set<string>>();
     for (const step of steps) {
@@ -177,6 +196,7 @@ export class DagResolver {
     return adj;
   }
 
+  /** Kahn's algorithm — produces a valid execution order or a partial one if cycles exist. */
   private topologicalSort(nodes: Map<string, ExecutionNode>): string[] {
     const inDegree = new Map<string, number>();
     for (const [id, node] of nodes) {
@@ -205,6 +225,7 @@ export class DagResolver {
     return sorted;
   }
 
+  /** DFS-based cycle detection using a recursion stack to capture full cycle paths. */
   private detectCycles(adj: Map<string, Set<string>>): string[][] {
     const cycles: string[][] = [];
     const visited = new Set<string>();

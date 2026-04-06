@@ -1,3 +1,9 @@
+/**
+ * Application configuration. Reads environment variables with sensible
+ * defaults; only DATABASE_URL is strictly required.
+ */
+
+/** All configuration values consumed by the API server. */
 export interface AppConfig {
   port: number;
   host: string;
@@ -16,6 +22,7 @@ function requireEnv(name: string): string {
   return value;
 }
 
+/** Parse environment variables into an {@link AppConfig}, throwing on missing required vars. */
 export function loadConfig(): AppConfig {
   return {
     port: parseInt(process.env.PORT ?? '3000', 10),

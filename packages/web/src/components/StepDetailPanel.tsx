@@ -1,6 +1,19 @@
 import { useState } from 'react';
 import StatusBadge from './StatusBadge.js';
 
+/**
+ * Slide-out panel that displays detailed execution data for a selected step.
+ * Fixed to the right side of the viewport (400px wide, full height).
+ * Shown when a user clicks a node in the FlowGraph component.
+ *
+ * Tabs:
+ * - Overview: status, attempt count, duration, timestamps, error details
+ * - Input: the resolved input data passed to the step (formatted JSON)
+ * - Output: the data produced by the step (formatted JSON)
+ * - Logs: timestamped, color-coded log entries from step execution
+ */
+
+/** Execution data for a single step within a flow run */
 interface StepRun {
   stepId: string;
   status: string;
@@ -16,6 +29,7 @@ interface StepRun {
 
 interface StepDetailPanelProps {
   stepId: string;
+  /** Step run data — undefined if the step hasn't executed yet */
   stepRun?: StepRun;
   onClose: () => void;
 }
@@ -103,6 +117,7 @@ export default function StepDetailPanel({ stepId, stepRun, onClose }: StepDetail
   );
 }
 
+/** Simple label-value row used in the Overview tab */
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex justify-between items-center">

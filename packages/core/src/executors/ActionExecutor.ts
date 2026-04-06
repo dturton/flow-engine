@@ -1,11 +1,18 @@
+/**
+ * Action step executor — delegates execution to an external connector
+ * resolved either by static registry key or dynamic connection ID.
+ */
+
 import type { StepExecutor, StepExecutionInput, StepExecutionResult } from '../engine/StepExecutor.js';
 import type { StepType } from '../types/flow.js';
 import { ConnectorNotFoundError } from '../errors.js';
 
+/** Interface that all connectors must implement (e.g. HttpConnector, ShopifyConnector). */
 export interface Connector {
   execute(operationId: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>>;
 }
 
+/** Static registry mapping connector keys (e.g. "http", "shopify") to connector instances. */
 export class ConnectorRegistry {
   private connectors = new Map<string, Connector>();
 
@@ -26,6 +33,10 @@ export interface ConnectionResolver {
   resolve(connectionId: string): Promise<Connector>;
 }
 
+/**
+ * Executes action steps by resolving the appropriate connector (via registry
+ * key or stored connection) and invoking the specified operation.
+ */
 export class ActionExecutor implements StepExecutor {
   readonly type: StepType = 'action';
 

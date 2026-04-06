@@ -1,3 +1,8 @@
+/**
+ * Shopify product operations: list, get, create, update, delete.
+ * Uses GraphQL Admin API with cursor-based pagination for list queries.
+ */
+
 import type { OperationHandler } from '../../base/types.js';
 import type { ShopifyGraphQLClient } from '../graphql-client.js';
 import type { ShopifyProduct, ShopifyConnection } from '../types.js';
@@ -95,6 +100,7 @@ const PRODUCT_DELETE = `
   }
 `;
 
+/** Register products.list, products.get, products.create, products.update, and products.delete operations. */
 export function registerProductOperations(
   ops: Map<string, OperationHandler>,
   graphql: ShopifyGraphQLClient,

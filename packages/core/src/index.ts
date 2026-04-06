@@ -1,3 +1,11 @@
+/**
+ * @module @flow-engine/core
+ *
+ * Public API surface for the flow engine core package. Re-exports the engine,
+ * DAG resolver, context store, executors, repositories, types, errors, and
+ * utility functions so consumers only need a single import source.
+ */
+
 export { FlowEngine } from './engine/FlowEngine.js';
 export type { FlowEngineOptions } from './engine/FlowEngine.js';
 export { DagResolver } from './engine/DagResolver.js';

@@ -1,3 +1,8 @@
+/**
+ * Shopify inventory operations: list levels by location, adjust quantities.
+ * Uses GraphQL Admin API. Inventory levels are scoped to a location ID.
+ */
+
 import type { OperationHandler } from '../../base/types.js';
 import type { ShopifyGraphQLClient } from '../graphql-client.js';
 import type { ShopifyInventoryLevel, ShopifyConnection } from '../types.js';
@@ -38,6 +43,7 @@ const INVENTORY_ADJUST = `
   }
 `;
 
+/** Register inventory.list and inventory.adjust operations. */
 export function registerInventoryOperations(
   ops: Map<string, OperationHandler>,
   graphql: ShopifyGraphQLClient,

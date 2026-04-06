@@ -1,6 +1,14 @@
+/**
+ * Visual editor for reusable flow functions.
+ * Provides an accordion-style UI for creating, editing, and deleting JavaScript
+ * functions that can be referenced from script steps. Includes inline validation
+ * for function names and a tag-style parameter chip input.
+ */
+
 import { useState } from 'react';
 import CodeEditor from './CodeEditor.js';
 
+/** Shape of a user-defined flow function */
 export interface FlowFunction {
   name: string;
   params: string[];
@@ -13,6 +21,7 @@ interface FunctionEditorProps {
   readOnly?: boolean;
 }
 
+/** Tag-style input for adding/removing function parameter names */
 function ParamChips({
   params,
   onChange,
@@ -76,6 +85,7 @@ function ParamChips({
   );
 }
 
+/** Collapsible card for a single function with name, params, and code body editor */
 function FunctionCard({
   fn,
   index,
@@ -177,6 +187,7 @@ function FunctionCard({
   );
 }
 
+/** Manages a list of flow functions with accordion expand, validation, and add/delete controls */
 export default function FunctionEditor({ functions, onChange, readOnly }: FunctionEditorProps) {
   const [expandedIndex, setExpandedIndex] = useState<number | null>(
     functions.length > 0 ? 0 : null

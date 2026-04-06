@@ -1,3 +1,8 @@
+/**
+ * Fastify application factory. Creates and configures the Fastify instance
+ * with CORS, a centralised error handler, and all route plugins.
+ */
+
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import type { AppConfig } from './config.js';
@@ -8,6 +13,10 @@ import { connectionRoutes } from './routes/connections.js';
 import { healthRoutes } from './routes/health.js';
 import { webhookRoutes } from './routes/webhooks.js';
 
+/**
+ * Build and return a fully configured Fastify instance with all route
+ * plugins registered. The caller is responsible for calling `app.listen()`.
+ */
 export async function buildApp(config: AppConfig, deps: AppDeps) {
   const app = Fastify({
     logger: {

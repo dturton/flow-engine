@@ -1,18 +1,28 @@
+/**
+ * Webhook management and public trigger routes. Management endpoints
+ * (under /api/flows/:flowId/webhooks) handle CRUD, while the public
+ * POST /webhooks/:path endpoint lets external services trigger flows
+ * with optional HMAC signature verification.
+ */
+
 import { randomBytes } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { verifySignature } from '@flow-engine/core';
 import type { AppDeps } from '../deps.js';
 
+/** Generate a random URL-safe path segment for a new webhook. */
 function generatePath(): string {
   return randomBytes(16).toString('hex');
 }
 
+/** Generate a random HMAC signing secret for webhook signature verification. */
 function generateSecret(): string {
   return randomBytes(32).toString('hex');
 }
 
+/** Register webhook management and public trigger routes. */
 export async function webhookRoutes(app: FastifyInstance, deps: AppDeps): Promise<void> {
-  // Create a webhook for a flow
+  /** POST /api/flows/:flowId/webhooks — create a webhook with auto-generated path and secret. */
   app.post('/api/flows/:flowId/webhooks', async (request, reply) => {
     const { flowId } = request.params as { flowId: string };
     const flow = await deps.flowRepository.findById(flowId);
@@ -28,14 +38,14 @@ export async function webhookRoutes(app: FastifyInstance, deps: AppDeps): Promis
     return reply.status(201).send(webhook);
   });
 
-  // List webhooks for a flow
+  /** GET /api/flows/:flowId/webhooks — list all webhooks registered for a flow. */
   app.get('/api/flows/:flowId/webhooks', async (request, reply) => {
     const { flowId } = request.params as { flowId: string };
     const webhooks = await deps.webhookRepository.findByFlowId(flowId);
     return reply.send(webhooks);
   });
 
-  // Delete a webhook
+  /** DELETE /api/webhooks/:webhookId — deactivate and remove a webhook. */
   app.delete('/api/webhooks/:webhookId', async (request, reply) => {
     const { webhookId } = request.params as { webhookId: string };
     try {
@@ -46,9 +56,12 @@ export async function webhookRoutes(app: FastifyInstance, deps: AppDeps): Promis
     return reply.status(204).send();
   });
 
-  // ── Public webhook trigger endpoint ──────────────────────────────────────
-  // This sits outside /api so it can be called by external services.
-  // Accepts any JSON body. Optionally verifies X-Webhook-Signature header.
+  /**
+   * POST /webhooks/:path — public trigger endpoint for external callers.
+   * Sits outside /api so third-party services can POST to it directly.
+   * Verifies the X-Webhook-Signature HMAC header when present, then
+   * enqueues a flow execution job via BullMQ and returns 202.
+   */
   app.post('/webhooks/:path', {
     config: { rawBody: true },
   }, async (request, reply) => {

@@ -1,6 +1,12 @@
+/**
+ * Persistence layer for flow runs and their step runs. Provides create,
+ * status update, step upsert, and query operations backed by Prisma.
+ */
+
 import type { PrismaClient, Prisma } from '../generated/prisma/client.js';
 import type { FlowRun, FlowRunStatus, StepRun } from '../types/run.js';
 
+/** Repository for flow run lifecycle persistence (create, update status, upsert step runs, query). */
 export class FlowRunRepository {
   constructor(private prisma: PrismaClient) {}
 
@@ -30,6 +36,7 @@ export class FlowRunRepository {
     });
   }
 
+  /** Creates or updates a step run record within a flow run (keyed by flowRunId + stepId). */
   async upsertStepRun(runId: string, stepRun: StepRun): Promise<void> {
     const shared = {
       status: stepRun.status,

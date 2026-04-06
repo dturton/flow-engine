@@ -1,3 +1,11 @@
+/**
+ * Engine factory module.
+ * Creates a fully-wired FlowEngine instance with all infrastructure dependencies
+ * (Prisma, Redis, S3) and registers built-in step executors and connectors.
+ * The worker calls {@link createEngineContext} once at startup and {@link closeEngineContext}
+ * on shutdown to manage the lifecycle of shared resources.
+ */
+
 import { Redis } from 'ioredis';
 import { S3Client } from '@aws-sdk/client-s3';
 import {
@@ -23,6 +31,7 @@ import type { WorkerConfig } from './config.js';
 import { HttpConnector, ShopifyConnector, ConnectorFactory } from '@flow-engine/connectors';
 import type { Connection } from '@flow-engine/core';
 
+/** Holds the FlowEngine and all infrastructure clients so they can be torn down together */
 export interface EngineContext {
   engine: FlowEngine;
   prisma: InstanceType<typeof PrismaClient>;
@@ -30,6 +39,10 @@ export interface EngineContext {
   s3: S3Client;
 }
 
+/**
+ * Creates infrastructure clients (Prisma, Redis, S3), wires up all step executors
+ * and connectors, and returns a ready-to-use FlowEngine bundled with its dependencies.
+ */
 export function createEngineContext(config: WorkerConfig): EngineContext {
   const prisma = createPrismaClient();
   const redis = new Redis(config.redisUrl, { maxRetriesPerRequest: null });
@@ -111,6 +124,7 @@ export function createEngineContext(config: WorkerConfig): EngineContext {
   return { engine, prisma, redis, s3 };
 }
 
+/** Gracefully disconnects all infrastructure clients */
 export async function closeEngineContext(ctx: EngineContext): Promise<void> {
   await ctx.redis.quit();
   await ctx.prisma.$disconnect();

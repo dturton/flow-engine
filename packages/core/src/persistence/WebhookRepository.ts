@@ -1,5 +1,11 @@
+/**
+ * Persistence layer for webhook registrations. Each webhook maps a unique
+ * URL path to a flow and carries a shared secret for signature verification.
+ */
+
 import type { PrismaClient, Webhook as PrismaWebhook } from '../generated/prisma/client.js';
 
+/** Domain model for a registered webhook endpoint. */
 export interface Webhook {
   id: string;
   flowId: string;
@@ -10,6 +16,7 @@ export interface Webhook {
   updatedAt: Date;
 }
 
+/** Repository for webhook CRUD — create, look up by flow or path, and delete. */
 export class WebhookRepository {
   constructor(private prisma: PrismaClient) {}
 

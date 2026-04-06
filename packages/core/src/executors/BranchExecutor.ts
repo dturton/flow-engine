@@ -1,8 +1,18 @@
+/**
+ * Branch step executor — evaluates JSONata conditions against the flow context
+ * and routes execution to the first matching branch's target step.
+ */
+
 import jsonata from 'jsonata';
 import type { StepExecutor, StepExecutionInput, StepExecutionResult } from '../engine/StepExecutor.js';
 import type { StepType } from '../types/flow.js';
 import { BranchResolutionError } from '../errors.js';
 
+/**
+ * Iterates through branch cases in order, evaluating each JSONata `when` expression.
+ * Returns the `nextStepId` of the first case that evaluates to `true`.
+ * Throws {@link BranchResolutionError} if no branch matches.
+ */
 export class BranchExecutor implements StepExecutor {
   readonly type: StepType = 'branch';
 

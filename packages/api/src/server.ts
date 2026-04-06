@@ -1,3 +1,9 @@
+/**
+ * API server entry point. Loads configuration, initialises infrastructure
+ * dependencies, builds the Fastify app, and starts listening for requests.
+ * Handles graceful shutdown on SIGTERM/SIGINT.
+ */
+
 import { loadConfig } from './config.js';
 import { createDeps, closeDeps } from './deps.js';
 import { buildApp } from './app.js';

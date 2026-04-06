@@ -1,3 +1,9 @@
+/**
+ * Interactive DAG visualization of a flow's step dependencies.
+ * Uses @xyflow/react for rendering and dagre for automatic top-to-bottom layout.
+ * Edges are color-coded and animated based on step execution status.
+ */
+
 import { useMemo, useCallback } from 'react';
 import {
   ReactFlow,
@@ -43,6 +49,7 @@ interface FlowGraphProps {
   selectedStepId?: string | null;
 }
 
+/** Computes node positions using dagre's top-to-bottom layout and builds styled edges */
 function layoutGraph(steps: StepDef[], stepRuns?: Record<string, StepRunData>) {
   const g = new dagre.graphlib.Graph();
   g.setGraph({ rankdir: 'TB', nodesep: 40, ranksep: 60 });
@@ -100,6 +107,7 @@ function layoutGraph(steps: StepDef[], stepRuns?: Record<string, StepRunData>) {
   return { nodes, edges };
 }
 
+/** Inner component that renders inside ReactFlowProvider with memoized layout */
 function FlowGraphInner({ steps, stepRuns, onStepSelect, selectedStepId }: FlowGraphProps) {
   const { nodes: initialNodes, edges: initialEdges } = useMemo(
     () => layoutGraph(steps, stepRuns),
@@ -142,6 +150,7 @@ function FlowGraphInner({ steps, stepRuns, onStepSelect, selectedStepId }: FlowG
   );
 }
 
+/** Wraps FlowGraphInner with ReactFlowProvider for context isolation */
 export default function FlowGraph(props: FlowGraphProps) {
   return (
     <ReactFlowProvider>

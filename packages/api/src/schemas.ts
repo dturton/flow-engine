@@ -1,5 +1,12 @@
+/**
+ * Zod request-validation schemas for the API. Each schema corresponds to
+ * a specific request body shape and is used for parsing/validation before
+ * the request reaches business logic.
+ */
+
 import { z } from 'zod';
 
+/** A single input mapping expression — supports JSONPath, JSONata, literal, or template types. */
 const MappingExpressionSchema = z.object({
   type: z.enum(['jsonpath', 'jsonata', 'literal', 'template']),
   value: z.string(),
@@ -40,6 +47,7 @@ const FlowErrorPolicySchema = z.object({
   errorStepId: z.string().optional(),
 });
 
+/** Schema for POST /api/flows — validates a full flow definition with at least one step. */
 export const CreateFlowSchema = z.object({
   name: z.string().min(1),
   description: z.string().optional(),
@@ -49,13 +57,16 @@ export const CreateFlowSchema = z.object({
   tags: z.array(z.string()).optional(),
 });
 
+/** Schema for PUT /api/flows/:flowId — all fields optional except tenantId (immutable). */
 export const UpdateFlowSchema = CreateFlowSchema.partial().omit({ tenantId: true });
 
+/** Schema for POST /api/flows/:flowId/trigger — specifies trigger type and arbitrary payload. */
 export const TriggerFlowSchema = z.object({
   type: z.enum(['webhook', 'schedule', 'manual', 'event']),
   data: z.record(z.unknown()),
 });
 
+/** Schema for POST /api/connections — creates a new connector credential set. */
 export const CreateConnectionSchema = z.object({
   tenantId: z.string().min(1),
   connectorKey: z.string().min(1),
@@ -65,6 +76,7 @@ export const CreateConnectionSchema = z.object({
   config: z.record(z.unknown()).optional(),
 });
 
+/** Schema for PUT /api/connections/:connectionId — partial update of connection fields. */
 export const UpdateConnectionSchema = z.object({
   name: z.string().min(1).optional(),
   description: z.string().optional(),

@@ -1,3 +1,10 @@
+/**
+ * @module @flow-engine/connectors
+ *
+ * Public API for the connector library. Re-exports base classes, utilities,
+ * and concrete connector implementations (HttpConnector, ShopifyConnector).
+ */
+
 // Base utilities
 export { BaseConnector } from './base/BaseConnector.js';
 export { AuthenticatedHttpClient } from './base/AuthenticatedHttpClient.js';

@@ -1,9 +1,16 @@
+/**
+ * Connection CRUD routes. Connections hold per-tenant credentials for a
+ * given connector (e.g. Shopify, HTTP). Credential values are masked in
+ * all API responses to prevent accidental leakage.
+ */
+
 import type { FastifyInstance } from 'fastify';
 import { CreateConnectionSchema, UpdateConnectionSchema } from '../schemas.js';
 import type { AppDeps } from '../deps.js';
 
+/** Register all /api/connections routes on the given Fastify instance. */
 export async function connectionRoutes(app: FastifyInstance, deps: AppDeps): Promise<void> {
-  // List connections (filter by tenantId, optionally by connectorKey)
+  /** GET /api/connections — list connections for a tenant. Requires ?tenantId. */
   app.get('/api/connections', async (request, reply) => {
     const { tenantId, connectorKey } = request.query as { tenantId?: string; connectorKey?: string };
     if (!tenantId) {
@@ -13,7 +20,7 @@ export async function connectionRoutes(app: FastifyInstance, deps: AppDeps): Pro
     return reply.send(connections.map((c) => ({ ...c, credentials: maskCredentials(c.credentials) })));
   });
 
-  // Get connection by ID
+  /** GET /api/connections/:connectionId — retrieve a single connection (credentials masked). */
   app.get('/api/connections/:connectionId', async (request, reply) => {
     const { connectionId } = request.params as { connectionId: string };
     const connection = await deps.connectionRepository.findById(connectionId);
@@ -27,7 +34,7 @@ export async function connectionRoutes(app: FastifyInstance, deps: AppDeps): Pro
     });
   });
 
-  // Create connection
+  /** POST /api/connections — create a new connection with Zod-validated body. */
   app.post('/api/connections', async (request, reply) => {
     const parsed = CreateConnectionSchema.safeParse(request.body);
     if (!parsed.success) {
@@ -45,7 +52,7 @@ export async function connectionRoutes(app: FastifyInstance, deps: AppDeps): Pro
     return reply.status(201).send({ ...connection, credentials: maskCredentials(connection.credentials) });
   });
 
-  // Update connection
+  /** PUT /api/connections/:connectionId — partial update of connection fields. */
   app.put('/api/connections/:connectionId', async (request, reply) => {
     const { connectionId } = request.params as { connectionId: string };
     const existing = await deps.connectionRepository.findById(connectionId);
@@ -62,7 +69,7 @@ export async function connectionRoutes(app: FastifyInstance, deps: AppDeps): Pro
     return reply.send({ ...updated, credentials: maskCredentials(updated.credentials) });
   });
 
-  // Delete connection
+  /** DELETE /api/connections/:connectionId — remove a connection. */
   app.delete('/api/connections/:connectionId', async (request, reply) => {
     const { connectionId } = request.params as { connectionId: string };
     const existing = await deps.connectionRepository.findById(connectionId);

@@ -1,8 +1,15 @@
+/**
+ * Dashboard page.
+ * Shows summary statistics (total flows, recent runs, failure count, success rate)
+ * and a table of the 20 most recent runs across all flows.
+ */
+
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, type FlowSummary, type FlowRunSummary } from '../api.js';
 import StatusBadge from '../components/StatusBadge.js';
 
+/** Landing page with aggregate stats and a recent-runs table */
 export default function Dashboard() {
   const [flows, setFlows] = useState<FlowSummary[]>([]);
   const [runs, setRuns] = useState<FlowRunSummary[]>([]);

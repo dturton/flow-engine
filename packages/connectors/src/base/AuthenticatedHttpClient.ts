@@ -1,12 +1,23 @@
+/**
+ * HTTP client that injects authentication headers (Bearer, Basic, API key,
+ * or custom header) into every request. Wraps the global `fetch` with
+ * timeout support, JSON serialization, and HTTP error classification.
+ */
+
 import type { AuthConfig, HttpConnectorConfig } from './types.js';
 import { classifyHttpError } from './error-classifier.js';
 
+/** Normalized HTTP response returned by {@link AuthenticatedHttpClient}. */
 export interface HttpResponse<T = unknown> {
   status: number;
   data: T;
   headers: Record<string, string>;
 }
 
+/**
+ * Fetch wrapper that auto-injects auth headers and classifies HTTP errors
+ * into {@link ConnectorApiError} with retryable/category metadata.
+ */
 export class AuthenticatedHttpClient {
   private readonly baseUrl: string;
   private readonly auth: AuthConfig;
@@ -20,6 +31,10 @@ export class AuthenticatedHttpClient {
     this.timeoutMs = config.timeoutMs ?? 30_000;
   }
 
+  /**
+   * Send an HTTP request with auth, timeout, and automatic error classification.
+   * Non-2xx responses throw a {@link ConnectorApiError}.
+   */
   async request<T = unknown>(
     method: string,
     path: string,
@@ -90,6 +105,7 @@ export class AuthenticatedHttpClient {
     return this.request<T>('DELETE', path);
   }
 
+  /** Map the auth config to concrete HTTP headers. */
   private buildAuthHeaders(): Record<string, string> {
     switch (this.auth.type) {
       case 'header':

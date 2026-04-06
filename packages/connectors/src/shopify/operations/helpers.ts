@@ -1,7 +1,13 @@
+/**
+ * Shared helpers for Shopify GraphQL operations: GID conversion,
+ * connection flattening, pagination mapping, search query building,
+ * and user error handling.
+ */
+
 import type { PageInfo } from '../../base/types.js';
 import type { UserError } from '../graphql-client.js';
 
-/** Convert a numeric or string ID to a Shopify Global ID. */
+/** Convert a numeric or string ID to a Shopify Global ID (no-op if already a GID). */
 export function toGid(resource: string, id: string | number): string {
   const idStr = String(id);
   if (idStr.startsWith('gid://')) return idStr;

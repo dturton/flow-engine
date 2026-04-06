@@ -1,9 +1,21 @@
+/**
+ * Script step executor — runs user-provided JavaScript in a Node.js `vm` sandbox
+ * with a 5-second timeout. The sandbox exposes `inputs`, `context`, and `output`
+ * but blocks access to Node.js internals (require, process, fs, etc.).
+ * Flow-level functions are prepended to the script as top-level declarations.
+ */
+
 import vm from 'node:vm';
 import type { StepExecutor, StepExecutionInput, StepExecutionResult } from '../engine/StepExecutor.js';
 import type { StepType } from '../types/flow.js';
 
+/** Hard timeout for sandboxed script execution to prevent runaway loops. */
 const SCRIPT_TIMEOUT_MS = 5000;
 
+/**
+ * Executes arbitrary JavaScript in a V8 sandbox. Scripts set `output` to
+ * return data. Node.js globals are explicitly blocked for security.
+ */
 export class ScriptExecutor implements StepExecutor {
   readonly type: StepType = 'script';
 

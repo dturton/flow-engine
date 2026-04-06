@@ -1,3 +1,9 @@
+/**
+ * Flow execution context store backed by Redis (primary) and S3 (overflow).
+ * Small payloads live entirely in Redis; step outputs exceeding 64KB are
+ * transparently offloaded to S3 and rehydrated on read.
+ */
+
 import type { Redis } from 'ioredis';
 import type { S3Client } from '@aws-sdk/client-s3';
 import { PutObjectCommand, GetObjectCommand, DeleteObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
@@ -5,9 +11,14 @@ import type { FlowContext, TriggerPayload, StepOutput } from '../types/run.js';
 import { ContextStoreError } from '../errors.js';
 
 const DEFAULT_TTL_SECONDS = 86400; // 24 hours
-const LARGE_PAYLOAD_THRESHOLD = 64 * 1024; // 64KB
+const LARGE_PAYLOAD_THRESHOLD = 64 * 1024; // 64KB — payloads above this are offloaded to S3
+/** Sentinel key stored in Redis in place of large payloads, pointing to the S3 object key. */
 const S3_REF_SENTINEL = '__s3ref';
 
+/**
+ * Manages per-run execution context in Redis with automatic S3 offloading
+ * for large step outputs. Context is TTL-bounded and cleaned up on release.
+ */
 export class ContextStore {
   private ttl: number;
 
@@ -20,6 +31,7 @@ export class ContextStore {
     this.ttl = ttlSeconds ?? DEFAULT_TTL_SECONDS;
   }
 
+  /** Creates and persists a fresh context for a new flow run. */
   async init(runId: string, trigger: TriggerPayload, flowId: string): Promise<FlowContext> {
     const context: FlowContext = {
       runId,
@@ -35,6 +47,7 @@ export class ContextStore {
     return context;
   }
 
+  /** Retrieves the context for a run, rehydrating any S3-offloaded step outputs. */
   async get(runId: string): Promise<FlowContext> {
     const key = this.redisKey(runId);
     const raw = await this.redis.get(key);
@@ -57,6 +70,7 @@ export class ContextStore {
     return context;
   }
 
+  /** Stores a step's output in the context, offloading to S3 if it exceeds the size threshold. */
   async commitStepOutput(runId: string, stepId: string, output: StepOutput): Promise<void> {
     const context = await this.getRaw(runId);
 
@@ -78,6 +92,7 @@ export class ContextStore {
     await this.redis.set(key, JSON.stringify(context), 'EX', this.ttl);
   }
 
+  /** Deletes all context data (Redis key + any S3 objects) for a completed/failed run. */
   async release(runId: string): Promise<void> {
     const key = this.redisKey(runId);
 

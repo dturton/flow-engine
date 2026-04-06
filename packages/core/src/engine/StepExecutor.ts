@@ -1,30 +1,44 @@
+/**
+ * Step executor abstraction and input resolution layer. Defines the
+ * {@link StepExecutor} interface, a registry for type-specific executors,
+ * and {@link InputResolver} which evaluates JSONPath, JSONata, literal,
+ * and template expressions against the flow context.
+ */
+
 import jsonata from 'jsonata';
 import { JSONPath } from 'jsonpath-plus';
 import type { StepType, StepDefinition, MappingExpression, FlowFunction } from '../types/flow.js';
 import type { FlowContext, LogEntry } from '../types/run.js';
 import type { ValidationIssue } from './DagResolver.js';
 
+/** Input bundle passed to every step executor. */
 export interface StepExecutionInput {
   step: StepDefinition;
   resolvedInputs: Record<string, unknown>;
   context: FlowContext;
+  /** Current retry attempt (1-based). */
   attempt: number;
   tenantId: string;
+  /** Flow-level reusable functions available to script executors. */
   flowFunctions?: FlowFunction[];
 }
 
+/** The result returned by a step executor after successful execution. */
 export interface StepExecutionResult {
   output: Record<string, unknown>;
   logs: LogEntry[];
   durationMs: number;
 }
 
+/** Contract for a type-specific step executor (action, transform, branch, etc.). */
 export interface StepExecutor {
   readonly type: StepType;
   execute(input: StepExecutionInput): Promise<StepExecutionResult>;
+  /** Optional static validation of a step definition before execution. */
   validate?(step: StepDefinition): ValidationIssue[];
 }
 
+/** Registry that maps step types to their executor implementations. */
 export class StepExecutorRegistry {
   private executors = new Map<StepType, StepExecutor>();
 
@@ -45,6 +59,10 @@ export class StepExecutorRegistry {
   }
 }
 
+/**
+ * Resolves a step's input mapping expressions against the current flow context.
+ * Supports four expression types: literal, JSONata, JSONPath, and mustache-style templates.
+ */
 export class InputResolver {
   async resolve(
     mapping: StepDefinition['inputMapping'],

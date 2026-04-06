@@ -1,3 +1,8 @@
+/**
+ * Root application layout and route definitions.
+ * Renders the top navigation bar and maps URL paths to page components.
+ */
+
 import { Routes, Route, Link } from 'react-router-dom';
 import Dashboard from './pages/Dashboard.js';
 import FlowList from './pages/FlowList.js';
@@ -5,6 +10,7 @@ import FlowDetail from './pages/FlowDetail.js';
 import RunDetail from './pages/RunDetail.js';
 import CreateFlow from './pages/CreateFlow.js';
 
+/** Top-level layout with navigation and route outlet */
 export default function App() {
   return (
     <div className="min-h-screen">

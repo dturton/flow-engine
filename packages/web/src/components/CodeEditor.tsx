@@ -1,3 +1,9 @@
+/**
+ * CodeMirror-based JavaScript code editor component.
+ * Wraps CodeMirror 6 with the oneDark theme, JavaScript syntax highlighting,
+ * and controlled-value syncing so it behaves like a React controlled input.
+ */
+
 import { useRef, useEffect } from 'react';
 import { EditorView, keymap, placeholder as placeholderExt } from '@codemirror/view';
 import { EditorState } from '@codemirror/state';
@@ -13,6 +19,7 @@ interface CodeEditorProps {
   readOnly?: boolean;
 }
 
+/** Renders a CodeMirror editor with JS highlighting, optional read-only mode, and external value sync */
 export default function CodeEditor({ value, onChange, placeholder, height = '120px', readOnly = false }: CodeEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);

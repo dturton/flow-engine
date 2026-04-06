@@ -1,3 +1,9 @@
+/**
+ * Shopify connector using the GraphQL Admin API. Registers operations for
+ * products, orders, customers, and inventory. Authenticates via
+ * X-Shopify-Access-Token and defaults to 2 req/s rate limiting.
+ */
+
 import { BaseConnector } from '../base/BaseConnector.js';
 import { ShopifyGraphQLClient } from './graphql-client.js';
 import { registerProductOperations } from './operations/products.js';
@@ -5,6 +11,7 @@ import { registerOrderOperations } from './operations/orders.js';
 import { registerCustomerOperations } from './operations/customers.js';
 import { registerInventoryOperations } from './operations/inventory.js';
 
+/** Configuration for creating a {@link ShopifyConnector} instance. */
 export interface ShopifyConfig {
   /** e.g. "my-store.myshopify.com" */
   storeUrl: string;
@@ -15,6 +22,10 @@ export interface ShopifyConfig {
   rateLimitPerSecond?: number;
 }
 
+/**
+ * Connector for the Shopify GraphQL Admin API. Normalizes the store URL,
+ * sets up auth, and delegates to operation modules for each resource type.
+ */
 export class ShopifyConnector extends BaseConnector {
   constructor(config: ShopifyConfig) {
     const apiVersion = config.apiVersion ?? '2025-01';

@@ -1,9 +1,16 @@
+/**
+ * BullMQ worker entry point.
+ * Connects to the job queue, processes flow execution jobs by delegating to
+ * the FlowEngine, and handles graceful shutdown on SIGTERM/SIGINT.
+ */
+
 import { Worker, type Job } from 'bullmq';
 import { Redis } from 'ioredis';
 import type { FlowDefinition, TriggerPayload } from '@flow-engine/core';
 import { loadConfig } from './config.js';
 import { createEngineContext, closeEngineContext, type EngineContext } from './engine-factory.js';
 
+/** Payload shape for jobs enqueued by the API */
 interface FlowJobData {
   flow: FlowDefinition;
   trigger: TriggerPayload;
@@ -11,6 +18,10 @@ interface FlowJobData {
 
 let engineCtx: EngineContext;
 
+/**
+ * Restores Date objects from ISO strings after BullMQ's JSON round-trip.
+ * BullMQ serializes job data as JSON, which converts Dates to strings.
+ */
 function rehydrateDates(data: FlowJobData): FlowJobData {
   return {
     flow: {
@@ -25,6 +36,7 @@ function rehydrateDates(data: FlowJobData): FlowJobData {
   };
 }
 
+/** Processes a single flow execution job by running it through the FlowEngine */
 async function processJob(job: Job<FlowJobData>): Promise<void> {
   const { flow, trigger } = rehydrateDates(job.data);
   console.log(`[worker] Processing job ${job.id} — flow "${flow.name}" (${flow.id})`);
@@ -40,6 +52,7 @@ async function processJob(job: Job<FlowJobData>): Promise<void> {
   }
 }
 
+/** Initializes the engine, starts the BullMQ worker, and registers shutdown handlers */
 async function main() {
   const config = loadConfig();
   engineCtx = createEngineContext(config);

@@ -1,8 +1,17 @@
+/**
+ * Loop step executor — iterates over an array selected by a JSONPath expression
+ * from the flow context and produces an output containing each item with its index.
+ */
+
 import type { StepExecutor, StepExecutionInput, StepExecutionResult } from '../engine/StepExecutor.js';
 import type { StepType } from '../types/flow.js';
 import type { LogEntry } from '../types/run.js';
 import { JSONPath } from 'jsonpath-plus';
 
+/**
+ * Resolves the `loopOver` JSONPath against the context, fans out each item
+ * into an iteration record, and returns the full iteration array as output.
+ */
 export class LoopExecutor implements StepExecutor {
   readonly type: StepType = 'loop';
 

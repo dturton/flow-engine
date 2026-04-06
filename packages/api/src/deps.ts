@@ -1,3 +1,9 @@
+/**
+ * Infrastructure dependency initialisation. Creates Prisma, Redis, S3,
+ * and BullMQ clients plus repository instances that are shared across
+ * all route handlers via {@link AppDeps}.
+ */
+
 import { Redis } from 'ioredis';
 import { S3Client } from '@aws-sdk/client-s3';
 import { Queue } from 'bullmq';
@@ -5,6 +11,7 @@ import { createPrismaClient, FlowRunRepository, FlowDefinitionRepository, Connec
 import type { PrismaClient } from '@flow-engine/core';
 import type { AppConfig } from './config.js';
 
+/** Shared infrastructure clients and repository instances injected into route handlers. */
 export interface AppDeps {
   prisma: InstanceType<typeof PrismaClient>;
   redis: Redis;
@@ -16,6 +23,7 @@ export interface AppDeps {
   webhookRepository: WebhookRepository;
 }
 
+/** Instantiate all infrastructure clients and repositories from the given config. */
 export function createDeps(config: AppConfig): AppDeps {
   const prisma = createPrismaClient();
 
@@ -39,6 +47,7 @@ export function createDeps(config: AppConfig): AppDeps {
   return { prisma, redis, s3, flowQueue, runRepository, flowRepository, connectionRepository, webhookRepository };
 }
 
+/** Gracefully close all infrastructure connections for clean shutdown. */
 export async function closeDeps(deps: AppDeps): Promise<void> {
   await deps.flowQueue.close();
   await deps.redis.quit();

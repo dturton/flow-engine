@@ -1,4 +1,9 @@
-/** GraphQL connection shape returned by Shopify list queries. */
+/**
+ * TypeScript interfaces mirroring the Shopify GraphQL Admin API object shapes.
+ * These are used to type the responses from GraphQL queries in the operation modules.
+ */
+
+/** GraphQL connection shape returned by Shopify list queries (Relay-style pagination). */
 export interface ShopifyConnection<T> {
   edges: { node: T }[];
   pageInfo: {

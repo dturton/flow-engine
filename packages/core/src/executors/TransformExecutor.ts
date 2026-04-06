@@ -1,6 +1,13 @@
+/**
+ * Transform step executor — a pure passthrough that emits the resolved inputs
+ * as its output. Useful for reshaping data between steps using input mappings
+ * without invoking any external connector.
+ */
+
 import type { StepExecutor, StepExecutionInput, StepExecutionResult } from '../engine/StepExecutor.js';
 import type { StepType } from '../types/flow.js';
 
+/** Passes resolved inputs directly through as output — all transformation is in the input mapping. */
 export class TransformExecutor implements StepExecutor {
   readonly type: StepType = 'transform';
 

@@ -1,20 +1,26 @@
+/**
+ * Flow CRUD and trigger routes. Handles creation (with DAG validation),
+ * listing, updating, deleting, and enqueuing flow executions via BullMQ.
+ */
+
 import type { FastifyInstance } from 'fastify';
 import type { FlowDefinition, ValidationIssue } from '@flow-engine/core';
 import { DagResolver } from '@flow-engine/core';
 import { CreateFlowSchema, UpdateFlowSchema, TriggerFlowSchema } from '../schemas.js';
 import type { AppDeps } from '../deps.js';
 
+/** Register all /api/flows routes on the given Fastify instance. */
 export async function flowRoutes(app: FastifyInstance, deps: AppDeps): Promise<void> {
   const dagResolver = new DagResolver();
 
-  // List flows (optionally filter by tenantId or tag)
+  /** GET /api/flows — list all flows, optionally filtered by tenantId or tag. */
   app.get('/api/flows', async (request, reply) => {
     const { tenantId, tag } = request.query as { tenantId?: string; tag?: string };
     const flows = await deps.flowRepository.findAll({ tenantId, tag });
     return reply.send(flows);
   });
 
-  // Get flow by ID
+  /** GET /api/flows/:flowId — retrieve a single flow by ID. */
   app.get('/api/flows/:flowId', async (request, reply) => {
     const { flowId } = request.params as { flowId: string };
     const flow = await deps.flowRepository.findById(flowId);
@@ -24,7 +30,7 @@ export async function flowRoutes(app: FastifyInstance, deps: AppDeps): Promise<v
     return reply.send(flow);
   });
 
-  // Create flow
+  /** POST /api/flows — create a flow after Zod validation and DAG cycle/dependency checking. */
   app.post('/api/flows', async (request, reply) => {
     const parsed = CreateFlowSchema.safeParse(request.body);
     if (!parsed.success) {
@@ -57,7 +63,7 @@ export async function flowRoutes(app: FastifyInstance, deps: AppDeps): Promise<v
     return reply.status(201).send(flow);
   });
 
-  // Update flow
+  /** PUT /api/flows/:flowId — partial update; re-validates the DAG if steps are changed. */
   app.put('/api/flows/:flowId', async (request, reply) => {
     const { flowId } = request.params as { flowId: string };
     const existing = await deps.flowRepository.findById(flowId);
@@ -89,7 +95,7 @@ export async function flowRoutes(app: FastifyInstance, deps: AppDeps): Promise<v
     return reply.send(updated);
   });
 
-  // Delete flow
+  /** DELETE /api/flows/:flowId — remove a flow definition. */
   app.delete('/api/flows/:flowId', async (request, reply) => {
     const { flowId } = request.params as { flowId: string };
     const existing = await deps.flowRepository.findById(flowId);
@@ -100,7 +106,10 @@ export async function flowRoutes(app: FastifyInstance, deps: AppDeps): Promise<v
     return reply.status(204).send();
   });
 
-  // Trigger flow execution (enqueues a job for the worker)
+  /**
+   * POST /api/flows/:flowId/trigger — enqueue a flow execution as a BullMQ
+   * job for the worker. Returns 202 with the job ID immediately.
+   */
   app.post('/api/flows/:flowId/trigger', async (request, reply) => {
     const { flowId } = request.params as { flowId: string };
     const flow = await deps.flowRepository.findById(flowId);

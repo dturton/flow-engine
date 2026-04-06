@@ -1,3 +1,9 @@
+/**
+ * Color-coded pill badge for displaying execution statuses.
+ * Used across run tables, step details, and the flow graph.
+ */
+
+/** Maps status strings to Tailwind background/text color classes */
 const statusColors: Record<string, string> = {
   queued: 'bg-gray-100 text-gray-700',
   running: 'bg-blue-100 text-blue-700',
@@ -10,6 +16,7 @@ const statusColors: Record<string, string> = {
   retrying: 'bg-yellow-100 text-yellow-700',
 };
 
+/** Renders a colored pill showing the given status text */
 export default function StatusBadge({ status }: { status: string }) {
   const color = statusColors[status] ?? 'bg-gray-100 text-gray-600';
   return (

@@ -1,6 +1,12 @@
+/**
+ * Delay step executor — pauses execution for a configurable duration.
+ * Reads `delayMs` from resolved inputs (defaults to 1000ms).
+ */
+
 import type { StepExecutor, StepExecutionInput, StepExecutionResult } from '../engine/StepExecutor.js';
 import type { StepType } from '../types/flow.js';
 
+/** Sleeps for the specified `delayMs` then returns. Used for rate-limiting or sequencing. */
 export class DelayExecutor implements StepExecutor {
   readonly type: StepType = 'delay';
 

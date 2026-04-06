@@ -1,5 +1,12 @@
+/**
+ * Lightweight GraphQL client for the Shopify Admin API. Sends all queries
+ * as POST to `/graphql.json`, extracts the data payload, and throws on
+ * GraphQL-level errors.
+ */
+
 import type { AuthenticatedHttpClient } from '../base/AuthenticatedHttpClient.js';
 
+/** A single GraphQL error from the Shopify response. */
 export interface GraphQLError {
   message: string;
   locations?: { line: number; column: number }[];
@@ -7,12 +14,14 @@ export interface GraphQLError {
   extensions?: Record<string, unknown>;
 }
 
+/** Full GraphQL response envelope including optional errors and extensions. */
 export interface GraphQLResponse<T = Record<string, unknown>> {
   data?: T;
   errors?: GraphQLError[];
   extensions?: Record<string, unknown>;
 }
 
+/** Shopify mutation user error — returned when input validation fails. */
 export interface UserError {
   field?: string[];
   message: string;
@@ -25,6 +34,10 @@ export interface UserError {
 export class ShopifyGraphQLClient {
   constructor(private readonly http: AuthenticatedHttpClient) {}
 
+  /**
+   * Execute a GraphQL query or mutation against the Shopify Admin API.
+   * @throws Error if the response contains GraphQL errors or missing data.
+   */
   async query<T = Record<string, unknown>>(
     query: string,
     variables?: Record<string, unknown>,

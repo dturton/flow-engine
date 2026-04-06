@@ -1,3 +1,10 @@
+/**
+ * Flow detail page.
+ * Displays a single flow's metadata, DAG graph, step table, reusable functions,
+ * webhook management (create/delete/copy URL+secret), and a paginated, filterable
+ * run history table. Supports manual triggering via the API.
+ */
+
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { api, type FlowSummary, type FlowRunSummary, type WebhookSummary } from '../api.js';
@@ -5,6 +12,7 @@ import StatusBadge from '../components/StatusBadge.js';
 import FunctionEditor from '../components/FunctionEditor.js';
 import FlowGraph from '../components/FlowGraph.js';
 
+/** Full detail view for a single flow including graph, webhooks, and run history */
 export default function FlowDetail() {
   const { flowId } = useParams<{ flowId: string }>();
   const [flow, setFlow] = useState<FlowSummary | null>(null);

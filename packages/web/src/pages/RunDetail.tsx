@@ -1,3 +1,12 @@
+/**
+ * Run detail page.
+ * Shows the execution state of a single flow run: status, timing, error summary,
+ * an interactive DAG graph with clickable step nodes, a slide-out step detail panel,
+ * and expandable step-run cards with output and logs.
+ * Auto-refreshes every 2s while the run is active (running/queued).
+ * Supports cancelling active runs and replaying completed/failed ones.
+ */
+
 import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { api, type FlowRunSummary, type FlowSummary } from '../api.js';
@@ -5,6 +14,7 @@ import StatusBadge from '../components/StatusBadge.js';
 import FlowGraph from '../components/FlowGraph.js';
 import StepDetailPanel from '../components/StepDetailPanel.js';
 
+/** Detailed view of a single flow run with live updates, cancel, and replay */
 export default function RunDetail() {
   const { runId } = useParams<{ runId: string }>();
   const [run, setRun] = useState<FlowRunSummary | null>(null);

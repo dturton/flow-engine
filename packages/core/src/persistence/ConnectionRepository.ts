@@ -1,8 +1,15 @@
+/**
+ * Persistence layer for connector connections (stored credentials + config).
+ * Credentials are encrypted at rest using AES-256-GCM when `CREDENTIALS_ENCRYPTION_KEY`
+ * is set. Without the key, credentials are stored as plaintext JSON (with a dev warning).
+ */
+
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 import type { PrismaClient, Prisma, Connection as PrismaConnection } from '../generated/prisma/client.js';
 
 const ALGORITHM = 'aes-256-gcm' as const;
 
+/** Reads the 32-byte AES key from the environment, or returns null if unset. */
 function getEncryptionKey(): Buffer | null {
   const keyHex = process.env.CREDENTIALS_ENCRYPTION_KEY;
   if (!keyHex) return null;
@@ -13,6 +20,7 @@ function getEncryptionKey(): Buffer | null {
   return key;
 }
 
+/** Encrypts credentials with AES-256-GCM, producing an `iv:tag:ciphertext` hex payload. */
 function encryptCredentials(creds: Record<string, unknown>): Prisma.InputJsonValue {
   const key = getEncryptionKey();
   if (!key) {
@@ -32,6 +40,7 @@ function encryptCredentials(creds: Record<string, unknown>): Prisma.InputJsonVal
   return { _enc: payload } as Prisma.InputJsonValue;
 }
 
+/** Decrypts an `_enc` payload back to plaintext JSON, or passes through unencrypted values. */
 function decryptCredentials(value: Prisma.JsonValue): Record<string, unknown> {
   if (
     value !== null &&
@@ -64,6 +73,7 @@ function decryptCredentials(value: Prisma.JsonValue): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
+/** Domain model for a stored connector connection (credentials + config). */
 export interface Connection {
   id: string;
   tenantId: string;
@@ -76,6 +86,7 @@ export interface Connection {
   updatedAt: Date;
 }
 
+/** Repository for CRUD operations on connector connections with transparent credential encryption. */
 export class ConnectionRepository {
   constructor(private prisma: PrismaClient) {}
 

@@ -1,3 +1,8 @@
+/**
+ * Shopify customer operations: list, get, create, update.
+ * Uses GraphQL Admin API with cursor-based pagination for list queries.
+ */
+
 import type { OperationHandler } from '../../base/types.js';
 import type { ShopifyGraphQLClient } from '../graphql-client.js';
 import type { ShopifyCustomer, ShopifyConnection } from '../types.js';
@@ -63,6 +68,7 @@ const CUSTOMER_UPDATE = `
   }
 `;
 
+/** Register customers.list, customers.get, customers.create, and customers.update operations. */
 export function registerCustomerOperations(
   ops: Map<string, OperationHandler>,
   graphql: ShopifyGraphQLClient,

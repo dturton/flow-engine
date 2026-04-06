@@ -1,3 +1,8 @@
+/**
+ * Shared type definitions for connector configuration, authentication,
+ * operation handlers, and pagination.
+ */
+
 import type { Connector } from '@flow-engine/core';
 
 /** A single operation handler within a connector. */

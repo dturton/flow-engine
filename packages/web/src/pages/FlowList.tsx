@@ -1,7 +1,14 @@
+/**
+ * Flow list page.
+ * Fetches and displays all flow definitions in a sortable table with name,
+ * tenant, step count, version, tags, and last-updated date.
+ */
+
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, type FlowSummary } from '../api.js';
 
+/** Tabular listing of all flow definitions */
 export default function FlowList() {
   const [flows, setFlows] = useState<FlowSummary[]>([]);
   const [loading, setLoading] = useState(true);

@@ -1,8 +1,17 @@
+/**
+ * Run query and management routes. Provides paginated listing of flow runs
+ * (with optional status filtering), individual run lookup, and cancellation.
+ */
+
 import type { FastifyInstance } from 'fastify';
 import type { AppDeps } from '../deps.js';
 
+/** Register all run-related routes on the given Fastify instance. */
 export async function runRoutes(app: FastifyInstance, deps: AppDeps): Promise<void> {
-  // List runs for a flow
+  /**
+   * GET /api/flows/:flowId/runs — paginated run list for a specific flow.
+   * Supports ?limit (max 200), ?offset, and ?status query parameters.
+   */
   app.get('/api/flows/:flowId/runs', async (request, reply) => {
     const { flowId } = request.params as { flowId: string };
     const { limit: limitStr, status, offset: offsetStr } = request.query as { limit?: string; status?: string; offset?: string };
@@ -36,7 +45,7 @@ export async function runRoutes(app: FastifyInstance, deps: AppDeps): Promise<vo
     return reply.send({ runs, total, limit: take, offset: skip });
   });
 
-  // List recent runs across all flows
+  /** GET /api/runs — recent runs across all flows (max 100). Supports ?status filter. */
   app.get('/api/runs', async (request, reply) => {
     const { limit: limitStr, status } = request.query as { limit?: string; status?: string };
     let take = 20;
@@ -58,7 +67,7 @@ export async function runRoutes(app: FastifyInstance, deps: AppDeps): Promise<vo
     return reply.send(runs);
   });
 
-  // Get a specific run
+  /** GET /api/runs/:runId — retrieve a single run with its step runs. */
   app.get('/api/runs/:runId', async (request, reply) => {
     const { runId } = request.params as { runId: string };
     const run = await deps.runRepository.findById(runId);
@@ -68,7 +77,7 @@ export async function runRoutes(app: FastifyInstance, deps: AppDeps): Promise<vo
     return reply.send(run);
   });
 
-  // Cancel a run
+  /** POST /api/runs/:runId/cancel — cancel a running flow. Returns 409 if already terminal. */
   app.post('/api/runs/:runId/cancel', async (request, reply) => {
     const { runId } = request.params as { runId: string };
     const run = await deps.runRepository.findById(runId);

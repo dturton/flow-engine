@@ -1,3 +1,9 @@
+/**
+ * Core flow execution engine. Orchestrates a flow run by resolving the DAG,
+ * dispatching steps in parallel (up to `maxConcurrentSteps`), handling retries
+ * and timeouts, and persisting results to the run repository.
+ */
+
 import type { FlowDefinition } from '../types/flow.js';
 import type {
   FlowRun,
@@ -19,6 +25,7 @@ import type { RetryManager } from './RetryManager.js';
 import type { FlowRunRepository } from '../persistence/FlowRunRepository.js';
 import { StepTimeoutError } from '../errors.js';
 
+/** Tuning knobs for flow execution concurrency, retries, and timeouts. */
 export interface FlowEngineOptions {
   maxConcurrentSteps: number;
   defaultRetryPolicy: RetryPolicy;
@@ -37,6 +44,11 @@ const DEFAULT_OPTIONS: FlowEngineOptions = {
   stepTimeoutMs: 30_000,
 };
 
+/**
+ * Executes flow definitions as DAGs. Entry point is {@link execute}, which
+ * validates the flow, initialises context, and runs the step dispatch loop.
+ * Supports mid-run cancellation via {@link cancel} and resumption via {@link resume}.
+ */
 export class FlowEngine {
   private options: FlowEngineOptions;
   private cancelledRuns = new Set<string>();
@@ -53,6 +65,7 @@ export class FlowEngine {
     this.options = { ...DEFAULT_OPTIONS, ...options };
   }
 
+  /** Validates the flow, creates a new run record, and executes all steps to completion. */
   async execute(flow: FlowDefinition, trigger: TriggerPayload): Promise<FlowRun> {
     const graph = this.dagResolver.resolve(flow);
     const runId = crypto.randomUUID();
@@ -82,6 +95,7 @@ export class FlowEngine {
     return run;
   }
 
+  /** Resumes a previously paused or failed run, optionally re-executing from a specific step. */
   async resume(runId: string, flow: FlowDefinition, fromStepId?: string): Promise<FlowRun> {
     const run = await this.runRepository.findById(runId);
     if (!run) throw new Error(`Run not found: ${runId}`);
@@ -107,11 +121,16 @@ export class FlowEngine {
     return run;
   }
 
+  /** Marks a run as cancelled; the run loop will exit on the next iteration. */
   async cancel(runId: string): Promise<void> {
     this.cancelledRuns.add(runId);
     await this.runRepository.updateStatus(runId, 'cancelled');
   }
 
+  /**
+   * Main dispatch loop. Repeatedly finds steps whose dependencies are satisfied,
+   * executes them in parallel batches, and handles failures per the flow's error policy.
+   */
   private async runLoop(run: FlowRun, flow: FlowDefinition, graph: ExecutionGraph): Promise<void> {
     while (true) {
       if (this.cancelledRuns.has(run.id)) {
@@ -178,6 +197,7 @@ export class FlowEngine {
     }
   }
 
+  /** Returns steps whose dependencies are all resolved and that haven't started yet. */
   private getReadySteps(run: FlowRun, flow: FlowDefinition, graph: ExecutionGraph): StepDefinition[] {
     const completedStepIds = new Set<string>();
     const failedStepIds = new Set<string>();
@@ -209,6 +229,7 @@ export class FlowEngine {
     return ready;
   }
 
+  /** Executes a single step with input resolution, timeout racing, retry loop, and output commit. */
   private async executeStep(
     run: FlowRun,
     flow: FlowDefinition,
@@ -325,6 +346,7 @@ export class FlowEngine {
     }
   }
 
+  /** Applies the flow's error policy (halt / continue / goto) after a step failure. */
   private async handleStepFailure(run: FlowRun, flow: FlowDefinition, stepRun: StepRun): Promise<void> {
     const policy = flow.errorPolicy;
 
@@ -353,6 +375,7 @@ export class FlowEngine {
     }
   }
 
+  /** BFS traversal to collect all transitive dependents of a step (used by resume). */
   private getAllDependents(stepId: string, graph: ExecutionGraph): string[] {
     const result: string[] = [];
     const visited = new Set<string>();
@@ -375,6 +398,7 @@ export class FlowEngine {
     return result;
   }
 
+  /** Normalises an unknown thrown value into a structured {@link StepError}. */
   private toStepError(err: unknown): StepError {
     if (err instanceof StepTimeoutError) {
       return {

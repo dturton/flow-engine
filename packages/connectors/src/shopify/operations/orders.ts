@@ -1,3 +1,10 @@
+/**
+ * Shopify order operations: list, get, create (via draft order), update.
+ * Uses GraphQL Admin API with cursor-based pagination for list queries.
+ * Note: orders.create uses the draftOrderCreate mutation because Shopify's
+ * GraphQL API does not support direct order creation.
+ */
+
 import type { OperationHandler } from '../../base/types.js';
 import type { ShopifyGraphQLClient } from '../graphql-client.js';
 import type { ShopifyOrder, ShopifyConnection } from '../types.js';
@@ -85,6 +92,7 @@ const ORDER_UPDATE = `
   }
 `;
 
+/** Register orders.list, orders.get, orders.create, and orders.update operations. */
 export function registerOrderOperations(
   ops: Map<string, OperationHandler>,
   graphql: ShopifyGraphQLClient,

@@ -1,3 +1,10 @@
+/**
+ * Worker configuration module.
+ * Loads and validates environment variables needed by the BullMQ worker process,
+ * providing sensible defaults for optional settings and failing fast on missing required ones.
+ */
+
+/** Configuration values for the BullMQ worker process */
 export interface WorkerConfig {
   redisUrl: string;
   databaseUrl: string;
@@ -11,18 +18,21 @@ export interface WorkerConfig {
   contextTtlSeconds: number;
 }
 
+/** Reads an env var or throws if it is not set */
 function requireEnv(name: string): string {
   const value = process.env[name];
   if (!value) throw new Error(`Missing required environment variable: ${name}`);
   return value;
 }
 
+/** Parses a string as an integer, throwing on NaN */
 function parseIntStrict(value: string, name: string): number {
   const n = parseInt(value, 10);
   if (Number.isNaN(n)) throw new Error(`Invalid integer for ${name}: "${value}"`);
   return n;
 }
 
+/** Builds a WorkerConfig from environment variables, applying defaults where possible */
 export function loadConfig(): WorkerConfig {
   return {
     redisUrl: process.env.REDIS_URL ?? 'redis://localhost:6379',

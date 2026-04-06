@@ -1,5 +1,16 @@
+/**
+ * Generic HTTP connector that makes raw fetch requests. Unlike
+ * {@link BaseConnector} subclasses, this connector ignores the operation ID
+ * and simply forwards url/method/headers/body from the step inputs.
+ * Useful for one-off HTTP calls in flows without a dedicated connector.
+ */
+
 import type { Connector } from '@flow-engine/core';
 
+/**
+ * Stateless HTTP connector — sends a single request per execution using
+ * the url, method, headers, and body provided in step inputs.
+ */
 export class HttpConnector implements Connector {
   async execute(_operationId: string, inputs: Record<string, unknown>): Promise<Record<string, unknown>> {
     const url = inputs.url as string;
