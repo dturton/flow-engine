@@ -5,7 +5,7 @@ export async function runRoutes(app: FastifyInstance, deps: AppDeps): Promise<vo
   // List runs for a flow
   app.get('/api/flows/:flowId/runs', async (request, reply) => {
     const { flowId } = request.params as { flowId: string };
-    const { limit: limitStr } = request.query as { limit?: string };
+    const { limit: limitStr, status, offset: offsetStr } = request.query as { limit?: string; status?: string; offset?: string };
     let take = 50;
     if (limitStr) {
       take = parseInt(limitStr, 10);
@@ -14,7 +14,47 @@ export async function runRoutes(app: FastifyInstance, deps: AppDeps): Promise<vo
       }
       take = Math.min(take, 200);
     }
-    const runs = await deps.runRepository.findByFlowId(flowId, take);
+    let skip = 0;
+    if (offsetStr) {
+      skip = parseInt(offsetStr, 10);
+      if (Number.isNaN(skip) || skip < 0) {
+        return reply.status(400).send({ error: 'Invalid offset parameter' });
+      }
+    }
+    const where: Record<string, unknown> = { flowId };
+    if (status) where.status = status;
+    const [runs, total] = await Promise.all([
+      deps.prisma.flowRun.findMany({
+        where,
+        orderBy: { startedAt: 'desc' },
+        take,
+        skip,
+        include: { stepRuns: true },
+      }),
+      deps.prisma.flowRun.count({ where }),
+    ]);
+    return reply.send({ runs, total, limit: take, offset: skip });
+  });
+
+  // List recent runs across all flows
+  app.get('/api/runs', async (request, reply) => {
+    const { limit: limitStr, status } = request.query as { limit?: string; status?: string };
+    let take = 20;
+    if (limitStr) {
+      take = parseInt(limitStr, 10);
+      if (Number.isNaN(take) || take < 1) {
+        return reply.status(400).send({ error: 'Invalid limit parameter' });
+      }
+      take = Math.min(take, 100);
+    }
+    const where: Record<string, unknown> = {};
+    if (status) where.status = status;
+    const runs = await deps.prisma.flowRun.findMany({
+      where,
+      orderBy: { startedAt: 'desc' },
+      take,
+      include: { stepRuns: true },
+    });
     return reply.send(runs);
   });
 

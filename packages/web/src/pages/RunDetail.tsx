@@ -1,20 +1,30 @@
 import { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { api, type FlowRunSummary } from '../api.js';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { api, type FlowRunSummary, type FlowSummary } from '../api.js';
 import StatusBadge from '../components/StatusBadge.js';
+import FlowGraph from '../components/FlowGraph.js';
+import StepDetailPanel from '../components/StepDetailPanel.js';
 
 export default function RunDetail() {
   const { runId } = useParams<{ runId: string }>();
   const [run, setRun] = useState<FlowRunSummary | null>(null);
+  const [flow, setFlow] = useState<FlowSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
+  const [replaying, setReplaying] = useState(false);
+  const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (!runId) return;
     api.getRun(runId)
-      .then(setRun)
+      .then((r) => {
+        setRun(r);
+        return api.getFlow(r.flowId);
+      })
+      .then(setFlow)
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, [runId]);
@@ -47,6 +57,20 @@ export default function RunDetail() {
     }
   };
 
+  const handleReplay = async () => {
+    if (!run) return;
+    setReplaying(true);
+    setCancelError(null);
+    try {
+      await api.triggerFlow(run.flowId, { type: run.trigger.type, data: run.trigger.data });
+      navigate(`/flows/${run.flowId}`);
+    } catch (err) {
+      setCancelError(err instanceof Error ? err.message : 'Replay failed');
+    } finally {
+      setReplaying(false);
+    }
+  };
+
   if (loading) return <p className="text-gray-500">Loading...</p>;
   if (error) return <p className="text-red-600">Error: {error}</p>;
   if (!run) return <p className="text-red-600">Run not found</p>;
@@ -73,20 +97,31 @@ export default function RunDetail() {
             {run.completedAt && <span>Completed: {new Date(run.completedAt).toLocaleString()}</span>}
           </div>
         </div>
-        {(run.status === 'running' || run.status === 'queued') && (
-          <div className="text-right">
-            <button
-              onClick={handleCancel}
-              disabled={cancelling}
-              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 text-sm font-medium"
-            >
-              {cancelling ? 'Cancelling...' : 'Cancel Run'}
-            </button>
-            {cancelError && (
-              <p className="text-red-600 text-sm mt-1">{cancelError}</p>
+        <div className="text-right">
+          <div className="flex gap-2">
+            {(run.status === 'completed' || run.status === 'failed' || run.status === 'cancelled') && (
+              <button
+                onClick={handleReplay}
+                disabled={replaying}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm font-medium"
+              >
+                {replaying ? 'Replaying...' : 'Replay Run'}
+              </button>
+            )}
+            {(run.status === 'running' || run.status === 'queued') && (
+              <button
+                onClick={handleCancel}
+                disabled={cancelling}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 text-sm font-medium"
+              >
+                {cancelling ? 'Cancelling...' : 'Cancel Run'}
+              </button>
             )}
           </div>
-        )}
+          {cancelError && (
+            <p className="text-red-600 text-sm mt-1">{cancelError}</p>
+          )}
+        </div>
       </div>
 
       {/* Run-level error */}
@@ -95,6 +130,28 @@ export default function RunDetail() {
           <p className="text-red-800 font-medium">Run failed at step: {run.error.stepId}</p>
           <p className="text-red-700 text-sm mt-1">{run.error.error.message}</p>
         </div>
+      )}
+
+      {/* Execution graph */}
+      {flow && (
+        <section className="mb-8">
+          <h2 className="text-lg font-semibold mb-3">Execution Graph</h2>
+          <FlowGraph
+            steps={flow.steps}
+            stepRuns={run.stepRuns}
+            onStepSelect={setSelectedStepId}
+            selectedStepId={selectedStepId}
+          />
+        </section>
+      )}
+
+      {/* Step detail panel */}
+      {selectedStepId && (
+        <StepDetailPanel
+          stepId={selectedStepId}
+          stepRun={run.stepRuns[selectedStepId]}
+          onClose={() => setSelectedStepId(null)}
+        />
       )}
 
       {/* Step runs */}

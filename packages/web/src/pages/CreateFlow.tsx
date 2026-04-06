@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useParams, Link } from 'react-router-dom';
 import { api } from '../api.js';
 import FunctionEditor, { type FlowFunction } from '../components/FunctionEditor.js';
 
@@ -25,11 +25,28 @@ type Tab = 'definition' | 'functions';
 
 export default function CreateFlow() {
   const navigate = useNavigate();
-  const [json, setJson] = useState(EXAMPLE_FLOW);
+  const { flowId } = useParams<{ flowId: string }>();
+  const isEdit = !!flowId;
+  const [json, setJson] = useState(isEdit ? '' : EXAMPLE_FLOW);
   const [functions, setFunctions] = useState<FlowFunction[]>([]);
   const [activeTab, setActiveTab] = useState<Tab>('definition');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [loadingFlow, setLoadingFlow] = useState(isEdit);
+
+  useEffect(() => {
+    if (!flowId) return;
+    api.getFlow(flowId)
+      .then((flow) => {
+        const { id, version, createdAt, updatedAt, ...rest } = flow;
+        setJson(JSON.stringify(rest, null, 2));
+        if (flow.functions) {
+          setFunctions(flow.functions);
+        }
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load flow'))
+      .finally(() => setLoadingFlow(false));
+  }, [flowId]);
 
   const handleSubmit = async () => {
     setError(null);
@@ -39,13 +56,18 @@ export default function CreateFlow() {
       if (functions.length > 0) {
         body.functions = functions;
       }
-      const flow = await api.createFlow(body);
-      navigate(`/flows/${flow.id}`);
+      if (isEdit) {
+        await api.updateFlow(flowId, body);
+        navigate(`/flows/${flowId}`);
+      } else {
+        const flow = await api.createFlow(body);
+        navigate(`/flows/${flow.id}`);
+      }
     } catch (err) {
       if (err instanceof SyntaxError) {
         setError('Invalid JSON: ' + err.message);
       } else {
-        setError(err instanceof Error ? err.message : 'Create failed');
+        setError(err instanceof Error ? err.message : (isEdit ? 'Update failed' : 'Create failed'));
       }
     } finally {
       setSubmitting(false);
@@ -58,13 +80,17 @@ export default function CreateFlow() {
     return false;
   });
 
+  if (loadingFlow) return <p className="text-gray-500">Loading...</p>;
+
   return (
     <div>
       <div className="mb-6">
-        <Link to="/" className="text-sm text-blue-600 hover:text-blue-800">&larr; Back to flows</Link>
+        <Link to={isEdit ? `/flows/${flowId}` : '/'} className="text-sm text-blue-600 hover:text-blue-800">
+          &larr; {isEdit ? 'Back to flow' : 'Back to flows'}
+        </Link>
       </div>
 
-      <h1 className="text-2xl font-bold mb-6">Create Flow</h1>
+      <h1 className="text-2xl font-bold mb-6">{isEdit ? 'Edit Flow' : 'Create Flow'}</h1>
 
       <div className="bg-white rounded-lg shadow">
         {/* Tabs */}
@@ -139,10 +165,10 @@ export default function CreateFlow() {
               disabled={submitting || hasValidationErrors}
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm font-medium"
             >
-              {submitting ? 'Creating...' : 'Create Flow'}
+              {submitting ? (isEdit ? 'Saving...' : 'Creating...') : (isEdit ? 'Save Changes' : 'Create Flow')}
             </button>
             <button
-              onClick={() => navigate('/')}
+              onClick={() => navigate(isEdit ? `/flows/${flowId}` : '/')}
               className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm font-medium"
             >
               Cancel

@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { api, type FlowSummary, type FlowRunSummary, type WebhookSummary } from '../api.js';
 import StatusBadge from '../components/StatusBadge.js';
 import FunctionEditor from '../components/FunctionEditor.js';
+import FlowGraph from '../components/FlowGraph.js';
 
 export default function FlowDetail() {
   const { flowId } = useParams<{ flowId: string }>();
@@ -15,14 +16,33 @@ export default function FlowDetail() {
   const [triggering, setTriggering] = useState(false);
   const [creatingWebhook, setCreatingWebhook] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<string>('');
+  const [runsPage, setRunsPage] = useState(0);
+  const [runsTotal, setRunsTotal] = useState(0);
+  const RUNS_PER_PAGE = 20;
+
+  const fetchRuns = useCallback(async () => {
+    if (!flowId) return;
+    const result = await api.listRuns(flowId, {
+      status: statusFilter || undefined,
+      limit: RUNS_PER_PAGE,
+      offset: runsPage * RUNS_PER_PAGE,
+    });
+    setRuns(result.runs);
+    setRunsTotal(result.total);
+  }, [flowId, statusFilter, runsPage]);
 
   useEffect(() => {
     if (!flowId) return;
-    Promise.all([api.getFlow(flowId), api.listRuns(flowId), api.listWebhooks(flowId)])
-      .then(([f, r, w]) => { setFlow(f); setRuns(r); setWebhooks(w); })
+    Promise.all([api.getFlow(flowId), api.listWebhooks(flowId)])
+      .then(([f, w]) => { setFlow(f); setWebhooks(w); })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, [flowId]);
+
+  useEffect(() => {
+    fetchRuns();
+  }, [fetchRuns]);
 
   const handleTrigger = async () => {
     if (!flowId) return;
@@ -30,8 +50,7 @@ export default function FlowDetail() {
     setTriggerError(null);
     try {
       await api.triggerFlow(flowId, { type: 'manual', data: {} });
-      const updatedRuns = await api.listRuns(flowId);
-      setRuns(updatedRuns);
+      await fetchRuns();
     } catch (err) {
       setTriggerError(err instanceof Error ? err.message : 'Trigger failed');
     } finally {
@@ -78,7 +97,7 @@ export default function FlowDetail() {
   return (
     <div>
       <div className="mb-6">
-        <Link to="/" className="text-sm text-blue-600 hover:text-blue-800">&larr; Back to flows</Link>
+        <Link to="/flows" className="text-sm text-blue-600 hover:text-blue-800">&larr; Back to flows</Link>
       </div>
 
       <div className="flex items-start justify-between mb-8">
@@ -92,13 +111,18 @@ export default function FlowDetail() {
           </div>
         </div>
         <div className="text-right">
-          <button
-            onClick={handleTrigger}
-            disabled={triggering}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm font-medium"
-          >
-            {triggering ? 'Triggering...' : 'Trigger Run'}
-          </button>
+          <div className="flex gap-2">
+            <Link to={`/flows/${flowId}/edit`} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm font-medium">
+              Edit
+            </Link>
+            <button
+              onClick={handleTrigger}
+              disabled={triggering}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm font-medium"
+            >
+              {triggering ? 'Triggering...' : 'Trigger Run'}
+            </button>
+          </div>
           {triggerError && (
             <p className="text-red-600 text-sm mt-1">{triggerError}</p>
           )}
@@ -108,32 +132,36 @@ export default function FlowDetail() {
       {/* Steps */}
       <section className="mb-8">
         <h2 className="text-lg font-semibold mb-3">Steps ({flow.steps.length})</h2>
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Dependencies</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {flow.steps.map((step) => (
-                <tr key={step.id}>
-                  <td className="px-6 py-3 text-sm font-mono text-gray-700">{step.id}</td>
-                  <td className="px-6 py-3 text-sm">{step.name}</td>
-                  <td className="px-6 py-3 text-sm">
-                    <span className="bg-purple-100 text-purple-700 text-xs px-2 py-0.5 rounded">{step.type}</span>
-                  </td>
-                  <td className="px-6 py-3 text-sm text-gray-500">
-                    {step.dependsOn.length > 0 ? step.dependsOn.join(', ') : 'none'}
-                  </td>
+        <FlowGraph steps={flow.steps} />
+        <details className="mt-4">
+          <summary className="text-sm text-gray-500 cursor-pointer hover:text-gray-700">Step table</summary>
+          <div className="bg-white rounded-lg shadow overflow-hidden mt-2">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Dependencies</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {flow.steps.map((step) => (
+                  <tr key={step.id}>
+                    <td className="px-6 py-3 text-sm font-mono text-gray-700">{step.id}</td>
+                    <td className="px-6 py-3 text-sm">{step.name}</td>
+                    <td className="px-6 py-3 text-sm">
+                      <span className="bg-purple-100 text-purple-700 text-xs px-2 py-0.5 rounded">{step.type}</span>
+                    </td>
+                    <td className="px-6 py-3 text-sm text-gray-500">
+                      {step.dependsOn.length > 0 ? step.dependsOn.join(', ') : 'none'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
       </section>
 
       {/* Functions */}
@@ -225,7 +253,24 @@ export default function FlowDetail() {
 
       {/* Runs */}
       <section>
-        <h2 className="text-lg font-semibold mb-3">Recent Runs</h2>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-lg font-semibold">Runs</h2>
+          <div className="flex items-center gap-3">
+            <select
+              value={statusFilter}
+              onChange={(e) => { setStatusFilter(e.target.value); setRunsPage(0); }}
+              className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 bg-white"
+            >
+              <option value="">All statuses</option>
+              <option value="completed">Completed</option>
+              <option value="failed">Failed</option>
+              <option value="running">Running</option>
+              <option value="queued">Queued</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+            <span className="text-sm text-gray-500">{runsTotal} total</span>
+          </div>
+        </div>
         {runs.length === 0 ? (
           <p className="text-gray-500">No runs yet.</p>
         ) : (
@@ -258,6 +303,27 @@ export default function FlowDetail() {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+        {runsTotal > RUNS_PER_PAGE && (
+          <div className="flex items-center justify-between mt-4">
+            <button
+              onClick={() => setRunsPage((p) => Math.max(0, p - 1))}
+              disabled={runsPage === 0}
+              className="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Previous
+            </button>
+            <span className="text-sm text-gray-500">
+              Page {runsPage + 1} of {Math.ceil(runsTotal / RUNS_PER_PAGE)}
+            </span>
+            <button
+              onClick={() => setRunsPage((p) => p + 1)}
+              disabled={(runsPage + 1) * RUNS_PER_PAGE >= runsTotal}
+              className="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Next
+            </button>
           </div>
         )}
       </section>

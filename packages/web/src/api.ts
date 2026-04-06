@@ -65,13 +65,22 @@ export const api = {
   listFlows: () => request<FlowSummary[]>('/flows'),
   getFlow: (id: string) => request<FlowSummary>(`/flows/${id}`),
   createFlow: (data: Record<string, unknown>) => request<FlowSummary>('/flows', { method: 'POST', body: JSON.stringify(data) }),
+  updateFlow: (id: string, data: Record<string, unknown>) => request<FlowSummary>(`/flows/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteFlow: (id: string) => request<void>(`/flows/${id}`, { method: 'DELETE' }),
   triggerFlow: (id: string, trigger: { type: string; data: Record<string, unknown> }) =>
     request<{ jobId: string }>(`/flows/${id}/trigger`, { method: 'POST', body: JSON.stringify(trigger) }),
-  listRuns: (flowId: string) => request<FlowRunSummary[]>(`/flows/${flowId}/runs`),
+  listRuns: (flowId: string, opts?: { status?: string; limit?: number; offset?: number }) => {
+    const params = new URLSearchParams();
+    if (opts?.status) params.set('status', opts.status);
+    if (opts?.limit) params.set('limit', String(opts.limit));
+    if (opts?.offset) params.set('offset', String(opts.offset));
+    const qs = params.toString();
+    return request<{ runs: FlowRunSummary[]; total: number; limit: number; offset: number }>(`/flows/${flowId}/runs${qs ? `?${qs}` : ''}`);
+  },
   getRun: (runId: string) => request<FlowRunSummary>(`/runs/${runId}`),
   cancelRun: (runId: string) => request<void>(`/runs/${runId}/cancel`, { method: 'POST' }),
   listWebhooks: (flowId: string) => request<WebhookSummary[]>(`/flows/${flowId}/webhooks`),
   createWebhook: (flowId: string) => request<WebhookSummary>(`/flows/${flowId}/webhooks`, { method: 'POST' }),
   deleteWebhook: (id: string) => request<void>(`/webhooks/${id}`, { method: 'DELETE' }),
+  listRecentRuns: (limit?: number) => request<FlowRunSummary[]>(`/runs${limit ? `?limit=${limit}` : ''}`),
 };

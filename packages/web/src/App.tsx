@@ -1,4 +1,5 @@
 import { Routes, Route, Link } from 'react-router-dom';
+import Dashboard from './pages/Dashboard.js';
 import FlowList from './pages/FlowList.js';
 import FlowDetail from './pages/FlowDetail.js';
 import RunDetail from './pages/RunDetail.js';
@@ -12,14 +13,19 @@ export default function App() {
           Flow Engine
         </Link>
         <Link to="/" className="text-sm text-gray-600 hover:text-gray-900">
+          Dashboard
+        </Link>
+        <Link to="/flows" className="text-sm text-gray-600 hover:text-gray-900">
           Flows
         </Link>
       </nav>
       <main className="max-w-7xl mx-auto px-6 py-8">
         <Routes>
-          <Route path="/" element={<FlowList />} />
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/flows" element={<FlowList />} />
           <Route path="/flows/new" element={<CreateFlow />} />
           <Route path="/flows/:flowId" element={<FlowDetail />} />
+          <Route path="/flows/:flowId/edit" element={<CreateFlow />} />
           <Route path="/runs/:runId" element={<RunDetail />} />
         </Routes>
       </main>
