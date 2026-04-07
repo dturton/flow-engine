@@ -72,15 +72,17 @@ export async function webhookRoutes(app: FastifyInstance, deps: AppDeps): Promis
       return reply.status(404).send({ error: 'Webhook not found' });
     }
 
-    // Verify HMAC signature if provided
+    // Verify HMAC signature (required)
     const signature = request.headers['x-webhook-signature'] as string | undefined;
-    if (signature) {
-      const rawBody = typeof request.body === 'string'
-        ? request.body
-        : JSON.stringify(request.body);
-      if (!verifySignature(rawBody, webhook.secret, signature)) {
-        return reply.status(401).send({ error: 'Invalid signature' });
-      }
+    if (!signature) {
+      return reply.status(401).send({ error: 'Missing X-Webhook-Signature header' });
+    }
+
+    const rawBody = typeof request.body === 'string'
+      ? request.body
+      : JSON.stringify(request.body);
+    if (!verifySignature(rawBody, webhook.secret, signature)) {
+      return reply.status(401).send({ error: 'Invalid signature' });
     }
 
     const flow = await deps.flowRepository.findById(webhook.flowId);

@@ -133,9 +133,17 @@ export class FlowEngine {
    */
   private async runLoop(run: FlowRun, flow: FlowDefinition, graph: ExecutionGraph): Promise<void> {
     while (true) {
+      // Check both the in-memory set (fast path for same-process cancel) and
+      // the database (cross-worker cancellation support).
       if (this.cancelledRuns.has(run.id)) {
         run.status = 'cancelled';
         await this.runRepository.updateStatus(run.id, 'cancelled');
+        return;
+      }
+
+      const persistedRun = await this.runRepository.findById(run.id);
+      if (persistedRun?.status === 'cancelled') {
+        run.status = 'cancelled';
         return;
       }
 
@@ -191,7 +199,10 @@ export class FlowEngine {
     // Determine final status
     if (run.status !== 'failed' && run.status !== 'cancelled') {
       const hasFailedSteps = Object.values(run.stepRuns).some((sr) => sr.status === 'failed');
-      run.status = hasFailedSteps ? 'completed' : 'completed';
+      // Mark as 'failed' only if there are failed steps AND the error policy is not 'continue'.
+      // Under 'continue' policy the run completed all runnable steps as intended.
+      const treatAsFailed = hasFailedSteps && flow.errorPolicy.onStepFailure !== 'continue';
+      run.status = treatAsFailed ? 'failed' : 'completed';
       run.completedAt = new Date();
       await this.runRepository.updateStatus(run.id, run.status, run.completedAt);
     }
@@ -202,11 +213,20 @@ export class FlowEngine {
     const completedStepIds = new Set<string>();
     const failedStepIds = new Set<string>();
     const startedStepIds = new Set<string>();
+    // Collect the set of step IDs that a branch has routed to (nextStepId).
+    // Steps that depend on a branch step but are NOT the chosen target are blocked.
+    const branchTargets = new Map<string, string>();
 
     for (const [stepId, stepRun] of Object.entries(run.stepRuns)) {
       startedStepIds.add(stepId);
       if (stepRun.status === 'completed') {
         completedStepIds.add(stepId);
+
+        // If this was a branch step, record its routing decision
+        const stepDef = flow.steps.find((s) => s.id === stepId);
+        if (stepDef?.type === 'branch' && stepRun.output?.nextStepId) {
+          branchTargets.set(stepId, stepRun.output.nextStepId as string);
+        }
       } else if (stepRun.status === 'failed') {
         failedStepIds.add(stepId);
         // If continueOnError, treat as "completed" for dependency resolution
@@ -221,9 +241,17 @@ export class FlowEngine {
     for (const step of flow.steps) {
       if (startedStepIds.has(step.id)) continue;
       const allDepsResolved = step.dependsOn.every((dep) => completedStepIds.has(dep));
-      if (allDepsResolved) {
-        ready.push(step);
-      }
+      if (!allDepsResolved) continue;
+
+      // If any dependency is a branch step, only allow this step if it is the
+      // branch's chosen target (nextStepId).
+      const blockedByBranch = step.dependsOn.some((dep) => {
+        const target = branchTargets.get(dep);
+        return target !== undefined && target !== step.id;
+      });
+      if (blockedByBranch) continue;
+
+      ready.push(step);
     }
 
     return ready;
@@ -407,6 +435,15 @@ export class FlowEngine {
         category: 'timeout',
         retryable: true,
       };
+    }
+
+    // Support ConnectorApiError (from @flow-engine/connectors) via duck typing
+    // to avoid a circular dependency. ConnectorApiError exposes a toStepError() method.
+    if (
+      err instanceof Error &&
+      typeof (err as Record<string, unknown>).toStepError === 'function'
+    ) {
+      return (err as { toStepError(): StepError }).toStepError();
     }
 
     const error = err instanceof Error ? err : new Error(String(err));

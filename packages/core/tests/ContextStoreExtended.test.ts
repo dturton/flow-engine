@@ -42,6 +42,14 @@ function createMockRedis() {
       store.delete(key);
       return 1;
     }),
+    eval: vi.fn(async (_script: string, _numKeys: number, key: string, stepId: string, outputJson: string, ttl: number) => {
+      const raw = store.get(key);
+      if (!raw) return null;
+      const ctx = JSON.parse(raw);
+      ctx.steps[stepId] = JSON.parse(outputJson);
+      store.set(key, JSON.stringify(ctx));
+      return 'OK';
+    }),
   };
 }
 
@@ -171,10 +179,11 @@ describe('ContextStore (additional)', () => {
     const output: StepOutput = { data: { x: 1 }, completedAt: new Date(), durationMs: 5 };
     await store.commitStepOutput('run-commit', 'step-x', output);
 
-    // redis.set should have been called twice — once for init, once for commit
-    expect(redis.set).toHaveBeenCalledTimes(2);
-    // Both calls should use the custom TTL
-    const calls = (redis.set as ReturnType<typeof vi.fn>).mock.calls;
-    expect(calls[1][3]).toBe(1800);
+    // redis.set is called once for init; commitStepOutput uses eval for atomicity
+    expect(redis.set).toHaveBeenCalledTimes(1);
+    expect(redis.eval).toHaveBeenCalledTimes(1);
+    // The eval call should pass the custom TTL as the last argument
+    const evalCalls = (redis.eval as ReturnType<typeof vi.fn>).mock.calls;
+    expect(evalCalls[0][5]).toBe(1800);
   });
 });

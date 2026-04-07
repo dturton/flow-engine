@@ -38,6 +38,14 @@ function createMockRedis() {
       store.delete(key);
       return 1;
     }),
+    eval: vi.fn(async (_script: string, _numKeys: number, key: string, stepId: string, outputJson: string, ttl: number) => {
+      const raw = store.get(key);
+      if (!raw) return null;
+      const ctx = JSON.parse(raw);
+      ctx.steps[stepId] = JSON.parse(outputJson);
+      store.set(key, JSON.stringify(ctx));
+      return 'OK';
+    }),
   };
 }
 
