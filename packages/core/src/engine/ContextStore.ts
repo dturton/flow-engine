@@ -70,19 +70,40 @@ export class ContextStore {
     return context;
   }
 
+  /**
+   * Lua script for atomic step output commit. Reads the context JSON from Redis,
+   * merges the new step output, and writes it back in a single atomic operation
+   * to prevent lost updates when multiple steps complete concurrently.
+   */
+  private static readonly COMMIT_LUA = `
+    local raw = redis.call('GET', KEYS[1])
+    if not raw then return nil end
+    local ctx = cjson.decode(raw)
+    ctx.steps[ARGV[1]] = cjson.decode(ARGV[2])
+    redis.call('SET', KEYS[1], cjson.encode(ctx), 'EX', tonumber(ARGV[3]))
+    return 'OK'
+  `;
+
   /** Stores a step's output in the context, offloading to S3 if it exceeds the size threshold. */
   async commitStepOutput(runId: string, stepId: string, output: StepOutput): Promise<void> {
-    const context = await this.getRaw(runId);
+    const key = this.redisKey(runId);
 
+    let valueToStore: StepOutput | Record<string, unknown>;
     if (await this.isLargePayload(output)) {
       const s3Key = await this.offloadToS3(runId, `step-${stepId}`, output);
-      context.steps[stepId] = { [S3_REF_SENTINEL]: s3Key } as unknown as StepOutput;
+      valueToStore = { [S3_REF_SENTINEL]: s3Key } as unknown as StepOutput;
     } else {
-      context.steps[stepId] = output;
+      valueToStore = output;
     }
 
-    const key = this.redisKey(runId);
-    await this.redis.set(key, JSON.stringify(context), 'EX', this.ttl);
+    // Atomically merge into the context via Lua to avoid read-modify-write races
+    const result = await this.redis.eval(
+      ContextStore.COMMIT_LUA, 1, key, stepId, JSON.stringify(valueToStore), this.ttl,
+    );
+
+    if (result === null) {
+      throw new ContextStoreError(`Context not found for run: ${runId}`);
+    }
   }
 
   async setVariable(runId: string, varKey: string, value: unknown): Promise<void> {

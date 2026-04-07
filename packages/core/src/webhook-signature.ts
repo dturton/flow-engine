@@ -4,7 +4,7 @@
  * following the `sha256=<hex>` convention (similar to GitHub webhook signatures).
  */
 
-import { createHmac } from 'node:crypto';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 
 /** Signs a payload string with HMAC-SHA256, returning a `sha256=<hex>` signature. */
 export function signPayload(payload: string, secret: string): string {
@@ -15,5 +15,8 @@ export function signPayload(payload: string, secret: string): string {
 /** Verifies that a signature matches the expected HMAC-SHA256 digest of the payload. */
 export function verifySignature(payload: string, secret: string, signature: string): boolean {
   const expected = signPayload(payload, secret);
-  return signature === expected;
+  const sigBuf = Buffer.from(signature);
+  const expectedBuf = Buffer.from(expected);
+  if (sigBuf.length !== expectedBuf.length) return false;
+  return timingSafeEqual(sigBuf, expectedBuf);
 }
