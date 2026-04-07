@@ -5,7 +5,7 @@
  */
 
 import type { Connector } from '@flow-engine/core';
-import type { OperationHandler, HttpConnectorConfig } from './types.js';
+import type { OperationHandler, HttpConnectorConfig, PaginatedResponse, PageInfo } from './types.js';
 import { AuthenticatedHttpClient } from './AuthenticatedHttpClient.js';
 import { RateLimiter } from './RateLimiter.js';
 
@@ -53,6 +53,45 @@ export abstract class BaseConnector implements Connector {
       await this.rateLimiter.acquire();
     }
     return handler(inputs);
+  }
+
+  /**
+   * Auto-paginate a list operation, fetching all pages until `hasNextPage`
+   * is false or `maxPages` is reached. Returns the concatenated data array.
+   *
+   * The target operation must return `{ data: T[], pageInfo: PageInfo | null }`.
+   */
+  async executeAll(
+    operationId: string,
+    inputs: Record<string, unknown> = {},
+    maxPages = 100,
+  ): Promise<PaginatedResponse> {
+    const allData: unknown[] = [];
+    let pageInfo: PageInfo | undefined;
+    let pages = 0;
+
+    do {
+      const pageInputs: Record<string, unknown> = { ...inputs };
+      if (pageInfo) {
+        pageInputs.pageInfo = pageInfo;
+      }
+
+      const result = await this.execute(operationId, pageInputs);
+
+      const data = result.data;
+      if (Array.isArray(data)) {
+        allData.push(...data);
+      }
+
+      const resultPageInfo = result.pageInfo as PageInfo | null | undefined;
+      pageInfo = resultPageInfo?.hasNextPage ? resultPageInfo : undefined;
+      pages++;
+    } while (pageInfo && pages < maxPages);
+
+    return {
+      data: allData,
+      pageInfo: pageInfo ?? null,
+    };
   }
 
   /** Register an operation handler. */
