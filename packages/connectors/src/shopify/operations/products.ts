@@ -34,8 +34,6 @@ const PRODUCT_FRAGMENT = `
           price
           sku
           inventoryQuantity
-          weight
-          weightUnit
         }
       }
     }

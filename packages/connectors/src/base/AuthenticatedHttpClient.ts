@@ -20,7 +20,7 @@ export interface HttpResponse<T = unknown> {
  */
 export class AuthenticatedHttpClient {
   private readonly baseUrl: string;
-  private readonly auth: AuthConfig;
+  private auth: AuthConfig;
   private readonly defaultHeaders: Record<string, string>;
   private readonly timeoutMs: number;
 
@@ -103,6 +103,11 @@ export class AuthenticatedHttpClient {
 
   async delete<T = unknown>(path: string): Promise<HttpResponse<T>> {
     return this.request<T>('DELETE', path);
+  }
+
+  /** Replace the auth config at runtime (e.g. after refreshing an OAuth token). */
+  updateAuth(auth: AuthConfig): void {
+    this.auth = auth;
   }
 
   /** Map the auth config to concrete HTTP headers. */

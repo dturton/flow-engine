@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import CodeEditor from '../CodeEditor.js';
 import { api, type ConnectionSummary } from '../../api.js';
 import InputMappingEditor from './InputMappingEditor.js';
+import { PathAutocompleteInput } from './PathAutocomplete.js';
 import { STEP_TYPE_MAP } from './stepTypeConfig.js';
 import { CONNECTORS, CONNECTOR_MAP } from './connectorConfig.js';
 import type {
@@ -15,6 +16,7 @@ import type {
 interface StepConfigPanelProps {
   step: StepDefinition;
   allSteps: StepDefinition[];
+  tenantId: string;
   dispatch: React.Dispatch<FlowBuilderAction>;
 }
 
@@ -39,7 +41,7 @@ function FieldRow({ label, children }: { label: string; children: React.ReactNod
 const inputClass = 'w-full text-xs border border-gray-300 rounded px-2 py-1.5 focus:ring-1 focus:ring-blue-500 focus:border-blue-500';
 const selectClass = 'w-full text-xs border border-gray-300 rounded px-2 py-1.5 bg-white focus:ring-1 focus:ring-blue-500';
 
-export default function StepConfigPanel({ step, allSteps, dispatch }: StepConfigPanelProps) {
+export default function StepConfigPanel({ step, allSteps, tenantId, dispatch }: StepConfigPanelProps) {
   const typeInfo = STEP_TYPE_MAP[step.type];
 
   const update = (changes: Partial<StepDefinition>) => {
@@ -142,6 +144,7 @@ export default function StepConfigPanel({ step, allSteps, dispatch }: StepConfig
                 {CONNECTOR_MAP[step.connectorKey].requiresConnection && (
                   <ConnectionPicker
                     connectorKey={step.connectorKey}
+                    tenantId={tenantId}
                     value={step.connectionId ?? ''}
                     onChange={(connectionId) => update({ connectionId })}
                   />
@@ -173,7 +176,7 @@ export default function StepConfigPanel({ step, allSteps, dispatch }: StepConfig
             <BranchEditor
               branches={step.branches ?? []}
               allSteps={allSteps}
-              currentStepId={step.id}
+              currentStep={step}
               onChange={(branches) => update({ branches })}
             />
           </Section>
@@ -183,12 +186,14 @@ export default function StepConfigPanel({ step, allSteps, dispatch }: StepConfig
         {step.type === 'loop' && (
           <Section title="Loop">
             <FieldRow label="Loop Over (JSONPath)">
-              <input
-                type="text"
+              <PathAutocompleteInput
                 value={step.loopOver ?? ''}
-                onChange={(e) => update({ loopOver: e.target.value })}
+                onChange={(v) => update({ loopOver: v })}
+                exprType="jsonpath"
+                currentStep={step}
+                allSteps={allSteps}
                 className={`${inputClass} font-mono`}
-                placeholder="$.steps.previous.data.items"
+                placeholder="Type $. to see available paths"
               />
             </FieldRow>
           </Section>
@@ -262,14 +267,15 @@ export default function StepConfigPanel({ step, allSteps, dispatch }: StepConfig
 function BranchEditor({
   branches,
   allSteps,
-  currentStepId,
+  currentStep,
   onChange,
 }: {
   branches: BranchCase[];
   allSteps: StepDefinition[];
-  currentStepId: string;
+  currentStep: StepDefinition;
   onChange: (branches: BranchCase[]) => void;
 }) {
+  const currentStepId = currentStep.id;
   const updateBranch = (idx: number, changes: Partial<BranchCase>) => {
     onChange(branches.map((b, i) => (i === idx ? { ...b, ...changes } : b)));
   };
@@ -297,12 +303,16 @@ function BranchEditor({
               &times;
             </button>
           </div>
-          <textarea
+          <PathAutocompleteInput
             value={branch.when}
-            onChange={(e) => updateBranch(idx, { when: e.target.value })}
+            onChange={(v) => updateBranch(idx, { when: v })}
+            exprType="jsonata"
+            currentStep={currentStep}
+            allSteps={allSteps}
+            multiline
             rows={1}
             className="w-full text-xs font-mono border border-gray-300 rounded px-2 py-1 focus:ring-1 focus:ring-blue-500 resize-y"
-            placeholder="JSONata condition"
+            placeholder="Type to see available paths"
           />
           <select
             value={branch.nextStepId}
@@ -325,10 +335,12 @@ function BranchEditor({
 
 function ConnectionPicker({
   connectorKey,
+  tenantId,
   value,
   onChange,
 }: {
   connectorKey: string;
+  tenantId: string;
   value: string;
   onChange: (connectionId: string) => void;
 }) {
@@ -337,11 +349,11 @@ function ConnectionPicker({
 
   useEffect(() => {
     setLoading(true);
-    api.listConnections('demo-tenant', connectorKey)
+    api.listConnections(tenantId, connectorKey)
       .then(setConnections)
       .catch(() => setConnections([]))
       .finally(() => setLoading(false));
-  }, [connectorKey]);
+  }, [tenantId, connectorKey]);
 
   return (
     <FieldRow label="Connection">

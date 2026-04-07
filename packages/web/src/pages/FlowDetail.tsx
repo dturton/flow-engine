@@ -23,6 +23,7 @@ export default function FlowDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [triggerError, setTriggerError] = useState<string | null>(null);
+  const [triggerSuccess, setTriggerSuccess] = useState<string | null>(null);
   const [triggering, setTriggering] = useState(false);
   const [creatingWebhook, setCreatingWebhook] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -54,19 +55,40 @@ export default function FlowDetail() {
     fetchRuns();
   }, [fetchRuns]);
 
+  const [pollUntil, setPollUntil] = useState(0);
+
   const handleTrigger = async () => {
     if (!flowId) return;
     setTriggering(true);
     setTriggerError(null);
+    setTriggerSuccess(null);
     try {
-      await api.triggerFlow(flowId, { type: 'manual', data: {} });
-      await fetchRuns();
+      const { jobId } = await api.triggerFlow(flowId, { type: 'manual', data: {} });
+      setTriggerSuccess(`Run queued (${jobId})`);
+      setTimeout(() => setTriggerSuccess(null), 5000);
+      // Poll for at least 30s to catch the new run appearing
+      setPollUntil(Date.now() + 30_000);
     } catch (err) {
       setTriggerError(err instanceof Error ? err.message : 'Trigger failed');
     } finally {
       setTriggering(false);
     }
   };
+
+  // Auto-refresh runs while any are active or we're waiting for a new run
+  useEffect(() => {
+    const hasActive = runs.some((r) => r.status === 'running' || r.status === 'queued');
+    const shouldPoll = hasActive || Date.now() < pollUntil;
+    if (!shouldPoll) return;
+    const interval = setInterval(() => {
+      fetchRuns();
+      // Stop forced polling once time is up and no active runs
+      if (!hasActive && Date.now() >= pollUntil) {
+        setPollUntil(0);
+      }
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [runs, fetchRuns, pollUntil]);
 
   const handleCreateWebhook = async () => {
     if (!flowId) return;
@@ -150,6 +172,9 @@ export default function FlowDetail() {
               {triggering ? 'Triggering...' : 'Trigger Run'}
             </button>
           </div>
+          {triggerSuccess && (
+            <p className="text-green-600 text-sm mt-1">{triggerSuccess}</p>
+          )}
           {triggerError && (
             <p className="text-red-600 text-sm mt-1">{triggerError}</p>
           )}

@@ -56,6 +56,7 @@ export default function FlowBuilder({ initialState, onSubmit, submitLabel }: Flo
               <StepConfigPanel
                 step={selectedStep}
                 allSteps={state.steps}
+                tenantId={state.tenantId}
                 dispatch={dispatch}
               />
             )}

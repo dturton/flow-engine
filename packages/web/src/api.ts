@@ -137,6 +137,11 @@ export const api = {
     credentials: Record<string, unknown>;
     config?: Record<string, unknown>;
   }) => request<ConnectionSummary>('/connections', { method: 'POST', body: JSON.stringify(data) }),
+  /** Test a connection's credentials */
+  testConnection: (id: string) =>
+    request<{ success: boolean; message?: string; error?: string; details?: Record<string, unknown> }>(
+      `/connections/${id}/test`, { method: 'POST' },
+    ),
   /** Delete a connection */
   deleteConnection: (id: string) => request<void>(`/connections/${id}`, { method: 'DELETE' }),
 };

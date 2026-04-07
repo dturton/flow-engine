@@ -63,7 +63,9 @@ export function createEngineContext(config: WorkerConfig): EngineContext {
   connectorFactory.registerBuilder('shopify', (conn: Connection) => {
     return new ShopifyConnector({
       storeUrl: conn.credentials.storeUrl as string,
-      accessToken: conn.credentials.accessToken as string,
+      accessToken: conn.credentials.accessToken as string | undefined,
+      clientId: conn.credentials.clientId as string | undefined,
+      clientSecret: conn.credentials.clientSecret as string | undefined,
       apiVersion: conn.config.apiVersion as string | undefined,
       rateLimitPerSecond: conn.config.rateLimitPerSecond as number | undefined,
     });
