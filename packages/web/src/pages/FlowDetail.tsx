@@ -1,29 +1,26 @@
-/**
- * Flow detail page.
- * Displays a single flow's metadata, DAG graph, step table, reusable functions,
- * webhook management (create/delete/copy URL+secret), and a paginated, filterable
- * run history table. Supports manual triggering via the API.
- */
-
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { api, type FlowSummary, type FlowRunSummary, type WebhookSummary } from '../api.js';
 import StatusBadge from '../components/StatusBadge.js';
 import FunctionEditor from '../components/FunctionEditor.js';
 import FlowGraph from '../components/FlowGraph.js';
+import LoadingSpinner from '../components/LoadingSpinner.js';
+import Breadcrumb from '../components/Breadcrumb.js';
+import ConfirmDialog from '../components/ui/ConfirmDialog.js';
+import Button from '../components/ui/Button.js';
+import { useToast } from '../contexts/ToastContext.js';
 
-/** Full detail view for a single flow including graph, webhooks, and run history */
 export default function FlowDetail() {
   const { flowId } = useParams<{ flowId: string }>();
   const navigate = useNavigate();
+  const { addToast } = useToast();
   const [flow, setFlow] = useState<FlowSummary | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [runs, setRuns] = useState<FlowRunSummary[]>([]);
   const [webhooks, setWebhooks] = useState<WebhookSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [triggerError, setTriggerError] = useState<string | null>(null);
-  const [triggerSuccess, setTriggerSuccess] = useState<string | null>(null);
   const [triggering, setTriggering] = useState(false);
   const [creatingWebhook, setCreatingWebhook] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -45,10 +42,18 @@ export default function FlowDetail() {
 
   useEffect(() => {
     if (!flowId) return;
+    const controller = new AbortController();
     Promise.all([api.getFlow(flowId), api.listWebhooks(flowId)])
-      .then(([f, w]) => { setFlow(f); setWebhooks(w); })
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
+      .then(([f, w]) => {
+        if (!controller.signal.aborted) { setFlow(f); setWebhooks(w); }
+      })
+      .catch((err) => {
+        if (!controller.signal.aborted) setError(err.message);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
   }, [flowId]);
 
   useEffect(() => {
@@ -60,29 +65,23 @@ export default function FlowDetail() {
   const handleTrigger = async () => {
     if (!flowId) return;
     setTriggering(true);
-    setTriggerError(null);
-    setTriggerSuccess(null);
     try {
       const { jobId } = await api.triggerFlow(flowId, { type: 'manual', data: {} });
-      setTriggerSuccess(`Run queued (${jobId})`);
-      setTimeout(() => setTriggerSuccess(null), 5000);
-      // Poll for at least 30s to catch the new run appearing
+      addToast(`Run queued (${jobId})`, 'success');
       setPollUntil(Date.now() + 30_000);
     } catch (err) {
-      setTriggerError(err instanceof Error ? err.message : 'Trigger failed');
+      addToast(err instanceof Error ? err.message : 'Trigger failed', 'error');
     } finally {
       setTriggering(false);
     }
   };
 
-  // Auto-refresh runs while any are active or we're waiting for a new run
   useEffect(() => {
     const hasActive = runs.some((r) => r.status === 'running' || r.status === 'queued');
     const shouldPoll = hasActive || Date.now() < pollUntil;
     if (!shouldPoll) return;
     const interval = setInterval(() => {
       fetchRuns();
-      // Stop forced polling once time is up and no active runs
       if (!hasActive && Date.now() >= pollUntil) {
         setPollUntil(0);
       }
@@ -96,8 +95,9 @@ export default function FlowDetail() {
     try {
       const webhook = await api.createWebhook(flowId);
       setWebhooks((prev) => [webhook, ...prev]);
+      addToast('Webhook created', 'success');
     } catch (err) {
-      setTriggerError(err instanceof Error ? err.message : 'Failed to create webhook');
+      addToast(err instanceof Error ? err.message : 'Failed to create webhook', 'error');
     } finally {
       setCreatingWebhook(false);
     }
@@ -107,8 +107,22 @@ export default function FlowDetail() {
     try {
       await api.deleteWebhook(id);
       setWebhooks((prev) => prev.filter((w) => w.id !== id));
+      addToast('Webhook deleted', 'success');
     } catch (err) {
-      setTriggerError(err instanceof Error ? err.message : 'Failed to delete webhook');
+      addToast(err instanceof Error ? err.message : 'Failed to delete webhook', 'error');
+    }
+  };
+
+  const handleDeleteFlow = async () => {
+    if (!flowId) return;
+    setDeleting(true);
+    try {
+      await api.deleteFlow(flowId);
+      navigate('/flows');
+    } catch (err) {
+      addToast(err instanceof Error ? err.message : 'Delete failed', 'error');
+      setDeleting(false);
+      setConfirmDelete(false);
     }
   };
 
@@ -122,15 +136,26 @@ export default function FlowDetail() {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  if (loading) return <p className="text-gray-500">Loading...</p>;
-  if (error) return <p className="text-red-600">Error: {error}</p>;
-  if (!flow) return <p className="text-red-600">Flow not found</p>;
+  if (loading) return <div className="flex justify-center py-12"><LoadingSpinner size="lg" /></div>;
+  if (error) return <p className="text-red-600" role="alert">Error: {error}</p>;
+  if (!flow) return <p className="text-red-600" role="alert">Flow not found</p>;
 
   return (
     <div>
-      <div className="mb-6">
-        <Link to="/flows" className="text-sm text-blue-600 hover:text-blue-800">&larr; Back to flows</Link>
-      </div>
+      <Breadcrumb items={[
+        { label: 'Flows', href: '/flows' },
+        { label: flow.name },
+      ]} />
+
+      <ConfirmDialog
+        open={confirmDelete}
+        title="Delete Flow"
+        message="Are you sure you want to delete this flow? This cannot be undone."
+        confirmLabel="Delete"
+        onConfirm={handleDeleteFlow}
+        onCancel={() => setConfirmDelete(false)}
+        loading={deleting}
+      />
 
       <div className="flex items-start justify-between mb-8">
         <div>
@@ -142,42 +167,22 @@ export default function FlowDetail() {
             <span>Error policy: {flow.errorPolicy.onStepFailure}</span>
           </div>
         </div>
-        <div className="text-right">
-          <div className="flex gap-2">
-            <button
-              onClick={async () => {
-                if (!flowId || !confirm('Are you sure you want to delete this flow? This cannot be undone.')) return;
-                setDeleting(true);
-                try {
-                  await api.deleteFlow(flowId);
-                  navigate('/flows');
-                } catch (err) {
-                  setTriggerError(err instanceof Error ? err.message : 'Delete failed');
-                  setDeleting(false);
-                }
-              }}
-              disabled={deleting}
-              className="px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 disabled:opacity-50 text-sm font-medium"
-            >
-              {deleting ? 'Deleting...' : 'Delete'}
-            </button>
-            <Link to={`/flows/${flowId}/edit`} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm font-medium">
-              Edit
-            </Link>
-            <button
-              onClick={handleTrigger}
-              disabled={triggering}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm font-medium"
-            >
-              {triggering ? 'Triggering...' : 'Trigger Run'}
-            </button>
-          </div>
-          {triggerSuccess && (
-            <p className="text-green-600 text-sm mt-1">{triggerSuccess}</p>
-          )}
-          {triggerError && (
-            <p className="text-red-600 text-sm mt-1">{triggerError}</p>
-          )}
+        <div className="flex gap-2">
+          <Button
+            variant="danger"
+            size="sm"
+            onClick={() => setConfirmDelete(true)}
+            disabled={deleting}
+            className="bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700"
+          >
+            Delete
+          </Button>
+          <Link to={`/flows/${flowId}/edit`} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm font-medium">
+            Edit
+          </Link>
+          <Button onClick={handleTrigger} loading={triggering}>
+            Trigger Run
+          </Button>
         </div>
       </div>
 
@@ -188,30 +193,32 @@ export default function FlowDetail() {
         <details className="mt-4">
           <summary className="text-sm text-gray-500 cursor-pointer hover:text-gray-700">Step table</summary>
           <div className="bg-white rounded-lg shadow overflow-hidden mt-2">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Dependencies</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {flow.steps.map((step) => (
-                  <tr key={step.id}>
-                    <td className="px-6 py-3 text-sm font-mono text-gray-700">{step.id}</td>
-                    <td className="px-6 py-3 text-sm">{step.name}</td>
-                    <td className="px-6 py-3 text-sm">
-                      <span className="bg-purple-100 text-purple-700 text-xs px-2 py-0.5 rounded">{step.type}</span>
-                    </td>
-                    <td className="px-6 py-3 text-sm text-gray-500">
-                      {step.dependsOn.length > 0 ? step.dependsOn.join(', ') : 'none'}
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Dependencies</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {flow.steps.map((step) => (
+                    <tr key={step.id}>
+                      <td className="px-6 py-3 text-sm font-mono text-gray-700">{step.id}</td>
+                      <td className="px-6 py-3 text-sm">{step.name}</td>
+                      <td className="px-6 py-3 text-sm">
+                        <span className="bg-purple-100 text-purple-700 text-xs px-2 py-0.5 rounded">{step.type}</span>
+                      </td>
+                      <td className="px-6 py-3 text-sm text-gray-500">
+                        {step.dependsOn.length > 0 ? step.dependsOn.join(', ') : 'none'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </details>
       </section>
@@ -234,13 +241,9 @@ export default function FlowDetail() {
       <section className="mb-8">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-semibold">Webhooks ({webhooks.length})</h2>
-          <button
-            onClick={handleCreateWebhook}
-            disabled={creatingWebhook}
-            className="px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 text-xs font-medium"
-          >
-            {creatingWebhook ? 'Creating...' : '+ Create Webhook'}
-          </button>
+          <Button size="sm" onClick={handleCreateWebhook} loading={creatingWebhook} className="bg-green-600 hover:bg-green-700 focus:ring-green-500">
+            + Create Webhook
+          </Button>
         </div>
 
         {webhooks.length === 0 ? (
@@ -251,7 +254,6 @@ export default function FlowDetail() {
               <div key={wh.id} className="bg-white rounded-lg shadow p-4">
                 <div className="flex items-start justify-between">
                   <div className="flex-1 min-w-0">
-                    {/* URL */}
                     <div className="mb-2">
                       <label className="block text-xs font-medium text-gray-500 mb-1">Webhook URL</label>
                       <div className="flex items-center gap-2">
@@ -261,13 +263,13 @@ export default function FlowDetail() {
                         <button
                           onClick={() => copyToClipboard(getWebhookUrl(wh.path), `url-${wh.id}`)}
                           className="text-xs px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded text-gray-600 shrink-0"
+                          aria-label="Copy webhook URL"
                         >
                           {copiedId === `url-${wh.id}` ? 'Copied!' : 'Copy'}
                         </button>
                       </div>
                     </div>
 
-                    {/* Secret */}
                     <div className="mb-2">
                       <label className="block text-xs font-medium text-gray-500 mb-1">Secret (for HMAC-SHA256 signature)</label>
                       <div className="flex items-center gap-2">
@@ -277,13 +279,13 @@ export default function FlowDetail() {
                         <button
                           onClick={() => copyToClipboard(wh.secret, `secret-${wh.id}`)}
                           className="text-xs px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded text-gray-600 shrink-0"
+                          aria-label="Copy webhook secret"
                         >
                           {copiedId === `secret-${wh.id}` ? 'Copied!' : 'Copy'}
                         </button>
                       </div>
                     </div>
 
-                    {/* Usage hint */}
                     <p className="text-xs text-gray-400 mt-2">
                       POST any JSON to the URL above. Optionally sign with <code className="bg-gray-100 px-1 rounded">X-Webhook-Signature: sha256=hmac_hex</code>
                     </p>
@@ -292,7 +294,7 @@ export default function FlowDetail() {
                   <button
                     onClick={() => handleDeleteWebhook(wh.id)}
                     className="ml-4 text-gray-400 hover:text-red-500 text-sm shrink-0"
-                    title="Delete webhook"
+                    aria-label={`Delete webhook ${wh.path}`}
                   >
                     Delete
                   </button>
@@ -308,7 +310,9 @@ export default function FlowDetail() {
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-semibold">Runs</h2>
           <div className="flex items-center gap-3">
+            <label htmlFor="status-filter" className="sr-only">Filter by status</label>
             <select
+              id="status-filter"
               value={statusFilter}
               onChange={(e) => { setStatusFilter(e.target.value); setRunsPage(0); }}
               className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 bg-white"
@@ -327,34 +331,36 @@ export default function FlowDetail() {
           <p className="text-gray-500">No runs yet.</p>
         ) : (
           <div className="bg-white rounded-lg shadow overflow-hidden">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Run ID</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Trigger</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Started</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Completed</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {runs.map((run) => (
-                  <tr key={run.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-3 text-sm">
-                      <Link to={`/runs/${run.id}`} className="text-blue-600 hover:text-blue-800 font-mono">
-                        {run.id.slice(0, 12)}...
-                      </Link>
-                    </td>
-                    <td className="px-6 py-3"><StatusBadge status={run.status} /></td>
-                    <td className="px-6 py-3 text-sm text-gray-600">{run.trigger.type}</td>
-                    <td className="px-6 py-3 text-sm text-gray-500">{new Date(run.startedAt).toLocaleString()}</td>
-                    <td className="px-6 py-3 text-sm text-gray-500">
-                      {run.completedAt ? new Date(run.completedAt).toLocaleString() : '-'}
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Run ID</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Trigger</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Started</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Completed</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {runs.map((run) => (
+                    <tr key={run.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-3 text-sm">
+                        <Link to={`/runs/${run.id}`} className="text-blue-600 hover:text-blue-800 font-mono">
+                          {run.id.slice(0, 12)}...
+                        </Link>
+                      </td>
+                      <td className="px-6 py-3"><StatusBadge status={run.status} /></td>
+                      <td className="px-6 py-3 text-sm text-gray-600">{run.trigger.type}</td>
+                      <td className="px-6 py-3 text-sm text-gray-500">{new Date(run.startedAt).toLocaleString()}</td>
+                      <td className="px-6 py-3 text-sm text-gray-500">
+                        {run.completedAt ? new Date(run.completedAt).toLocaleString() : '-'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
         {runsTotal > RUNS_PER_PAGE && (

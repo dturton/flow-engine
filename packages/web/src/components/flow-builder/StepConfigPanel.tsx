@@ -70,7 +70,7 @@ export default function StepConfigPanel({ step, allSteps, tenantId, dispatch }: 
   };
 
   return (
-    <div className="w-[400px] flex-shrink-0 border-l border-gray-200 bg-white overflow-y-auto">
+    <div className="w-full md:w-[400px] flex-shrink-0 border-l border-gray-200 bg-white overflow-y-auto">
       <div className="p-4 space-y-4">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -95,8 +95,12 @@ export default function StepConfigPanel({ step, allSteps, tenantId, dispatch }: 
               type="text"
               value={step.name}
               onChange={(e) => update({ name: e.target.value })}
-              className={inputClass}
+              className={`${inputClass} ${!step.name.trim() ? 'border-red-400' : ''}`}
+              aria-invalid={!step.name.trim() ? 'true' : undefined}
             />
+            {!step.name.trim() && (
+              <p className="text-[10px] text-red-500 mt-0.5" role="alert">Name is required</p>
+            )}
           </FieldRow>
           <FieldRow label="ID">
             <input type="text" value={step.id} readOnly className={`${inputClass} bg-gray-50 text-gray-500`} />

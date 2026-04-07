@@ -42,14 +42,14 @@ export default function StepDetailPanel({ stepId, stepRun, onClose }: StepDetail
   const tabs: Tab[] = ['overview', 'input', 'output', 'logs'];
 
   return (
-    <div className="fixed top-0 right-0 h-full w-[400px] bg-white shadow-xl border-l border-gray-200 z-50 flex flex-col">
+    <div className="fixed top-0 right-0 h-full w-full md:w-[400px] bg-white shadow-xl border-l border-gray-200 z-50 flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
         <div className="flex items-center gap-2 min-w-0">
           <span className="font-mono text-sm font-medium truncate">{stepId}</span>
           {stepRun && <StatusBadge status={stepRun.status} />}
         </div>
-        <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-lg leading-none ml-2">&times;</button>
+        <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-lg leading-none ml-2" aria-label="Close step detail panel">&times;</button>
       </div>
 
       {/* Tabs */}

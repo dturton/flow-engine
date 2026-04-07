@@ -33,6 +33,6 @@ export function loadConfig(): AppConfig {
     s3Region: process.env.S3_REGION ?? 'us-east-1',
     s3Endpoint: process.env.S3_ENDPOINT,
     bullmqQueueName: process.env.BULLMQ_QUEUE ?? 'flow-runs',
-    corsOrigin: process.env.CORS_ORIGIN ?? '*',
+    corsOrigin: process.env.CORS_ORIGIN ?? 'http://localhost:5173',
   };
 }

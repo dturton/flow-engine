@@ -1,15 +1,9 @@
-/**
- * Dashboard page.
- * Shows summary statistics (total flows, recent runs, failure count, success rate)
- * and a table of the 20 most recent runs across all flows.
- */
-
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, type FlowSummary, type FlowRunSummary } from '../api.js';
 import StatusBadge from '../components/StatusBadge.js';
+import LoadingSpinner from '../components/LoadingSpinner.js';
 
-/** Landing page with aggregate stats and a recent-runs table */
 export default function Dashboard() {
   const [flows, setFlows] = useState<FlowSummary[]>([]);
   const [runs, setRuns] = useState<FlowRunSummary[]>([]);
@@ -17,14 +11,22 @@ export default function Dashboard() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    const controller = new AbortController();
     Promise.all([api.listFlows(), api.listRecentRuns(20)])
-      .then(([f, r]) => { setFlows(f); setRuns(r); })
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
+      .then(([f, r]) => {
+        if (!controller.signal.aborted) { setFlows(f); setRuns(r); }
+      })
+      .catch((err) => {
+        if (!controller.signal.aborted) setError(err.message);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
   }, []);
 
-  if (loading) return <p className="text-gray-500">Loading...</p>;
-  if (error) return <p className="text-red-600">Error: {error}</p>;
+  if (loading) return <div className="flex justify-center py-12"><LoadingSpinner size="lg" /></div>;
+  if (error) return <p className="text-red-600" role="alert">Error: {error}</p>;
 
   const failedRuns = runs.filter((r) => r.status === 'failed');
   const completedRuns = runs.filter((r) => r.status === 'completed');
@@ -73,36 +75,38 @@ export default function Dashboard() {
           <p className="text-gray-500">No runs yet. <Link to="/flows" className="text-blue-600 hover:text-blue-800">Create a flow</Link> and trigger it to get started.</p>
         ) : (
           <div className="bg-white rounded-lg shadow overflow-hidden">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Run ID</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Flow</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Trigger</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Started</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {runs.map((run) => (
-                  <tr key={run.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-3 text-sm">
-                      <Link to={`/runs/${run.id}`} className="text-blue-600 hover:text-blue-800 font-mono">
-                        {run.id.slice(0, 12)}...
-                      </Link>
-                    </td>
-                    <td className="px-6 py-3 text-sm">
-                      <Link to={`/flows/${run.flowId}`} className="text-blue-600 hover:text-blue-800">
-                        {flowMap.get(run.flowId) ?? run.flowId.slice(0, 12)}
-                      </Link>
-                    </td>
-                    <td className="px-6 py-3"><StatusBadge status={run.status} /></td>
-                    <td className="px-6 py-3 text-sm text-gray-600">{run.trigger.type}</td>
-                    <td className="px-6 py-3 text-sm text-gray-500">{new Date(run.startedAt).toLocaleString()}</td>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Run ID</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Flow</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Trigger</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Started</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {runs.map((run) => (
+                    <tr key={run.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-3 text-sm">
+                        <Link to={`/runs/${run.id}`} className="text-blue-600 hover:text-blue-800 font-mono">
+                          {run.id.slice(0, 12)}...
+                        </Link>
+                      </td>
+                      <td className="px-6 py-3 text-sm">
+                        <Link to={`/flows/${run.flowId}`} className="text-blue-600 hover:text-blue-800">
+                          {flowMap.get(run.flowId) ?? run.flowId.slice(0, 12)}
+                        </Link>
+                      </td>
+                      <td className="px-6 py-3"><StatusBadge status={run.status} /></td>
+                      <td className="px-6 py-3 text-sm text-gray-600">{run.trigger.type}</td>
+                      <td className="px-6 py-3 text-sm text-gray-500">{new Date(run.startedAt).toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </section>

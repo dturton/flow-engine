@@ -19,20 +19,25 @@ model FlowDefinition {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
+  webhooks    Webhook[]
+
   @@index([tenantId])
   @@unique([id, version])
 }
 
 model Webhook {
-  id        String    @id @default(cuid())
+  id        String          @id @default(cuid())
   flowId    String
-  path      String    @unique
+  path      String          @unique
   secret    String
-  active    Boolean   @default(true)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  active    Boolean         @default(true)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  flow      FlowDefinition  @relation(fields: [flowId], references: [id], onDelete: Cascade)
 
   @@index([flowId])
+  @@index([path])
 }
 
 model Connection {
@@ -48,6 +53,7 @@ model Connection {
 
   @@index([tenantId])
   @@index([tenantId, connectorKey])
+  @@unique([tenantId, connectorKey, name])
 }
 
 model FlowRun {
@@ -66,6 +72,8 @@ model FlowRun {
 
   @@index([flowId])
   @@index([tenantId])
+  @@index([tenantId, status, startedAt])
+  @@index([status, startedAt])
 }
 
 model StepRun {
@@ -81,8 +89,9 @@ model StepRun {
   output      Json?
   error       Json?
   logs        Json
-  flowRun     FlowRun   @relation(fields: [flowRunId], references: [id])
+  flowRun     FlowRun   @relation(fields: [flowRunId], references: [id], onDelete: Cascade)
 
   @@index([flowRunId])
+  @@index([flowRunId, status])
   @@unique([flowRunId, stepId])
 }

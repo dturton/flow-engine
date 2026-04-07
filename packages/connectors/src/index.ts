@@ -22,6 +22,9 @@ export type {
   PaginationInput,
 } from './base/types.js';
 
+// SSRF protection
+export { validateUrl } from './utils/url-validator.js';
+
 // Connectors
 export { HttpConnector } from './http/HttpConnector.js';
 export { ShopifyConnector } from './shopify/ShopifyConnector.js';

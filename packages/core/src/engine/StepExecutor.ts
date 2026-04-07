@@ -11,6 +11,9 @@ import type { StepType, StepDefinition, MappingExpression, FlowFunction } from '
 import type { FlowContext, LogEntry } from '../types/run.js';
 import type { ValidationIssue } from './DagResolver.js';
 
+/** Default timeout for JSONata expression evaluation (ms). */
+const JSONATA_TIMEOUT_MS = 5000;
+
 /** Input bundle passed to every step executor. */
 export interface StepExecutionInput {
   step: StepDefinition;
@@ -94,8 +97,15 @@ export class InputResolver {
 
       case 'jsonata': {
         const expression = jsonata(expr.value);
-        // jsonata's evaluate is async in v2.x
-        return await expression.evaluate(contextObj);
+        // Race JSONata evaluation against a timeout to prevent DoS via expensive expressions
+        const evalPromise = expression.evaluate(contextObj);
+        const timeoutPromise = new Promise<never>((_resolve, reject) => {
+          setTimeout(
+            () => reject(new Error(`JSONata expression timed out after ${JSONATA_TIMEOUT_MS}ms`)),
+            JSONATA_TIMEOUT_MS
+          );
+        });
+        return await Promise.race([evalPromise, timeoutPromise]);
       }
 
       case 'jsonpath': {

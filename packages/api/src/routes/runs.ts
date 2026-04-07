@@ -6,6 +6,8 @@
 import type { FastifyInstance } from 'fastify';
 import type { AppDeps } from '../deps.js';
 
+const VALID_STATUSES = ['queued', 'running', 'completed', 'failed', 'cancelled'] as const;
+
 /** Register all run-related routes on the given Fastify instance. */
 export async function runRoutes(app: FastifyInstance, deps: AppDeps): Promise<void> {
   /**
@@ -31,7 +33,12 @@ export async function runRoutes(app: FastifyInstance, deps: AppDeps): Promise<vo
       }
     }
     const where: Record<string, unknown> = { flowId };
-    if (status) where.status = status;
+    if (status) {
+      if (!VALID_STATUSES.includes(status as typeof VALID_STATUSES[number])) {
+        return reply.status(400).send({ error: `Invalid status. Must be one of: ${VALID_STATUSES.join(', ')}` });
+      }
+      where.status = status;
+    }
     const [runs, total] = await Promise.all([
       deps.prisma.flowRun.findMany({
         where,
@@ -57,7 +64,12 @@ export async function runRoutes(app: FastifyInstance, deps: AppDeps): Promise<vo
       take = Math.min(take, 100);
     }
     const where: Record<string, unknown> = {};
-    if (status) where.status = status;
+    if (status) {
+      if (!VALID_STATUSES.includes(status as typeof VALID_STATUSES[number])) {
+        return reply.status(400).send({ error: `Invalid status. Must be one of: ${VALID_STATUSES.join(', ')}` });
+      }
+      where.status = status;
+    }
     const runs = await deps.prisma.flowRun.findMany({
       where,
       orderBy: { startedAt: 'desc' },

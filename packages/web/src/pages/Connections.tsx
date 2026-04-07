@@ -1,6 +1,11 @@
 import { useEffect, useState, useCallback } from 'react';
 import { api, type ConnectionSummary } from '../api.js';
 import { CONNECTORS } from '../components/flow-builder/connectorConfig.js';
+import LoadingSpinner from '../components/LoadingSpinner.js';
+import Button from '../components/ui/Button.js';
+import Input from '../components/ui/Input.js';
+import ConfirmDialog from '../components/ui/ConfirmDialog.js';
+import { useToast } from '../contexts/ToastContext.js';
 
 interface NewConnectionForm {
   connectorKey: string;
@@ -16,7 +21,6 @@ const EMPTY_FORM: NewConnectionForm = {
   credentials: {},
 };
 
-/** Credential fields required per connector */
 const CREDENTIAL_FIELDS: Record<string, { key: string; label: string; placeholder: string; sensitive?: boolean; hint?: string }[]> = {
   shopify: [
     { key: 'storeUrl', label: 'Shop Domain', placeholder: 'my-store.myshopify.com' },
@@ -31,32 +35,39 @@ const CREDENTIAL_FIELDS: Record<string, { key: string; label: string; placeholde
 };
 
 export default function Connections() {
+  const { addToast } = useToast();
   const [tenantId, setTenantId] = useState('demo-tenant');
   const [tenantInput, setTenantInput] = useState('demo-tenant');
   const [connections, setConnections] = useState<ConnectionSummary[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<NewConnectionForm>(EMPTY_FORM);
+  const [nameError, setNameError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
 
   const fetchConnections = useCallback(() => {
     setLoading(true);
     api.listConnections(tenantId)
       .then(setConnections)
-      .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load'))
+      .catch((err) => addToast(err instanceof Error ? err.message : 'Failed to load', 'error'))
       .finally(() => setLoading(false));
-  }, [tenantId]);
+  }, [tenantId, addToast]);
 
   useEffect(() => {
+    const controller = new AbortController();
     fetchConnections();
+    return () => controller.abort();
   }, [fetchConnections]);
 
   const handleCreate = async () => {
-    setError(null);
+    if (!form.name.trim()) {
+      setNameError('Name is required');
+      return;
+    }
+    setNameError(null);
     setSubmitting(true);
     try {
-      // Filter out empty credential values
       const creds: Record<string, string> = {};
       for (const [k, v] of Object.entries(form.credentials)) {
         if (v.trim()) creds[k] = v.trim();
@@ -70,21 +81,25 @@ export default function Connections() {
       });
       setForm(EMPTY_FORM);
       setShowForm(false);
+      addToast('Connection created', 'success');
       fetchConnections();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Create failed');
+      addToast(err instanceof Error ? err.message : 'Create failed', 'error');
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`Delete connection "${name}"? Flows using it will fail.`)) return;
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
     try {
-      await api.deleteConnection(id);
-      setConnections((prev) => prev.filter((c) => c.id !== id));
+      await api.deleteConnection(deleteTarget.id);
+      setConnections((prev) => prev.filter((c) => c.id !== deleteTarget.id));
+      addToast(`Connection "${deleteTarget.name}" deleted`, 'success');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Delete failed');
+      addToast(err instanceof Error ? err.message : 'Delete failed', 'error');
+    } finally {
+      setDeleteTarget(null);
     }
   };
 
@@ -119,18 +134,25 @@ export default function Connections() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">Connections</h1>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
-        >
+        <Button onClick={() => setShowForm(!showForm)}>
           {showForm ? 'Cancel' : '+ New Connection'}
-        </button>
+        </Button>
       </div>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Delete Connection"
+        message={`Delete connection "${deleteTarget?.name}"? Flows using it will fail.`}
+        confirmLabel="Delete"
+        onConfirm={handleDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
 
       {/* Tenant selector */}
       <div className="mb-6 flex items-center gap-2">
-        <label className="text-sm font-medium text-gray-700">Tenant:</label>
+        <label htmlFor="tenant-input" className="text-sm font-medium text-gray-700">Tenant:</label>
         <input
+          id="tenant-input"
           type="text"
           value={tenantInput}
           onChange={(e) => setTenantInput(e.target.value)}
@@ -150,20 +172,15 @@ export default function Connections() {
         </button>
       </div>
 
-      {error && (
-        <div className="mb-4 bg-red-50 border border-red-200 rounded p-3 text-red-700 text-sm">
-          {error}
-        </div>
-      )}
-
       {/* Create form */}
       {showForm && (
         <div className="bg-white rounded-lg shadow p-6 mb-6">
           <h2 className="text-lg font-semibold mb-4">New Connection</h2>
           <div className="space-y-4 max-w-lg">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Connector</label>
+              <label htmlFor="connector-select" className="block text-sm font-medium text-gray-700 mb-1">Connector</label>
               <select
+                id="connector-select"
                 value={form.connectorKey}
                 onChange={(e) => setForm({ ...form, connectorKey: e.target.value, credentials: {} })}
                 className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white focus:ring-2 focus:ring-blue-500"
@@ -175,35 +192,33 @@ export default function Connections() {
               </select>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
-              <input
-                type="text"
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
-                placeholder="e.g. My Shopify Store"
-              />
-            </div>
+            <Input
+              label="Name"
+              required
+              value={form.name}
+              onChange={(e) => {
+                setForm({ ...form, name: e.target.value });
+                if (nameError) setNameError(null);
+              }}
+              error={nameError ?? undefined}
+              placeholder="e.g. My Shopify Store"
+            />
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-              <input
-                type="text"
-                value={form.description}
-                onChange={(e) => setForm({ ...form, description: e.target.value })}
-                className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
-                placeholder="Optional"
-              />
-            </div>
+            <Input
+              label="Description"
+              value={form.description}
+              onChange={(e) => setForm({ ...form, description: e.target.value })}
+              placeholder="Optional"
+            />
 
             {credFields.length > 0 && (
               <div className="space-y-3">
                 <label className="block text-sm font-medium text-gray-700">Credentials</label>
                 {credFields.map((field) => (
                   <div key={field.key}>
-                    <label className="block text-xs text-gray-500 mb-0.5">{field.label}</label>
+                    <label htmlFor={`cred-${field.key}`} className="block text-xs text-gray-500 mb-0.5">{field.label}</label>
                     <input
+                      id={`cred-${field.key}`}
                       type={field.sensitive ? 'password' : 'text'}
                       value={form.credentials[field.key] ?? ''}
                       onChange={(e) =>
@@ -223,20 +238,16 @@ export default function Connections() {
               </div>
             )}
 
-            <button
-              onClick={handleCreate}
-              disabled={!canSubmit || submitting}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm font-medium"
-            >
-              {submitting ? 'Creating...' : 'Create Connection'}
-            </button>
+            <Button onClick={handleCreate} disabled={!canSubmit} loading={submitting}>
+              Create Connection
+            </Button>
           </div>
         </div>
       )}
 
       {/* Connections list */}
       {loading ? (
-        <p className="text-gray-500">Loading...</p>
+        <div className="flex justify-center py-12"><LoadingSpinner size="lg" /></div>
       ) : connections.length === 0 ? (
         <div className="bg-white rounded-lg shadow p-8 text-center text-gray-500">
           No connections yet. Create one to use connectors like Shopify in your flows.
@@ -267,13 +278,15 @@ export default function Connections() {
                     <button
                       onClick={() => handleTest(conn.id)}
                       disabled={testingId === conn.id}
-                      className="text-sm text-blue-600 hover:text-blue-800 disabled:opacity-50"
+                      className="text-sm text-blue-600 hover:text-blue-800 disabled:opacity-50 inline-flex items-center gap-1"
+                      aria-label={`Test connection ${conn.name}`}
                     >
-                      {testingId === conn.id ? 'Testing...' : 'Test'}
+                      {testingId === conn.id ? <><LoadingSpinner size="sm" /> Testing...</> : 'Test'}
                     </button>
                     <button
-                      onClick={() => handleDelete(conn.id, conn.name)}
+                      onClick={() => setDeleteTarget({ id: conn.id, name: conn.name })}
                       className="text-sm text-gray-400 hover:text-red-500"
+                      aria-label={`Delete connection ${conn.name}`}
                     >
                       Delete
                     </button>
@@ -284,7 +297,7 @@ export default function Connections() {
                     testResult.success
                       ? 'bg-green-50 text-green-700'
                       : 'bg-red-50 text-red-700'
-                  }`}>
+                  }`} role="alert">
                     {testResult.success ? '\u2713' : '\u2717'} {testResult.message}
                   </div>
                 )}

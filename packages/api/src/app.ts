@@ -5,8 +5,10 @@
 
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import rateLimit from '@fastify/rate-limit';
 import type { AppConfig } from './config.js';
 import type { AppDeps } from './deps.js';
+import { registerAuth } from './middleware/auth.js';
 import { flowRoutes } from './routes/flows.js';
 import { runRoutes } from './routes/runs.js';
 import { connectionRoutes } from './routes/connections.js';
@@ -26,12 +28,22 @@ export async function buildApp(config: AppConfig, deps: AppDeps) {
 
   await app.register(cors, { origin: config.corsOrigin });
 
+  // Global rate limiting: 100 requests per minute
+  await app.register(rateLimit, {
+    max: 100,
+    timeWindow: '1 minute',
+  });
+
+  // API key authentication
+  registerAuth(app);
+
   // Error handler
-  app.setErrorHandler((error: Error & { statusCode?: number; code?: string }, _request, reply) => {
-    app.log.error(error);
+  app.setErrorHandler((error: Error & { statusCode?: number; code?: string }, request, reply) => {
+    request.log.error(error);
     const statusCode = error.statusCode ?? 500;
+    const message = statusCode >= 500 ? 'Internal server error' : error.message;
     reply.status(statusCode).send({
-      error: error.message,
+      error: message,
       code: error.code ?? 'INTERNAL_ERROR',
     });
   });

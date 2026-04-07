@@ -30,7 +30,15 @@ export class BranchExecutor implements StepExecutor {
       variables: context.variables,
     };
 
+    let defaultBranch: typeof step.branches[number] | undefined;
+
     for (const branch of step.branches) {
+      // Support a default/fallback branch that fires when no condition matches
+      if (branch.when === 'default' || (branch as unknown as Record<string, unknown>).default === true) {
+        defaultBranch = branch;
+        continue;
+      }
+
       const expression = jsonata(branch.when);
       const result = await expression.evaluate(contextObj);
       if (result === true) {
@@ -47,6 +55,21 @@ export class BranchExecutor implements StepExecutor {
           durationMs,
         };
       }
+    }
+
+    if (defaultBranch) {
+      const durationMs = Date.now() - startTime;
+      return {
+        output: { nextStepId: defaultBranch.nextStepId },
+        logs: [
+          {
+            level: 'info',
+            message: `No branch condition matched, using default branch to step "${defaultBranch.nextStepId}"`,
+            timestamp: new Date(),
+          },
+        ],
+        durationMs,
+      };
     }
 
     throw new BranchResolutionError(

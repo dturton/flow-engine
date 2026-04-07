@@ -1,42 +1,39 @@
-/**
- * Run detail page.
- * Shows the execution state of a single flow run: status, timing, error summary,
- * an interactive DAG graph with clickable step nodes, a slide-out step detail panel,
- * and expandable step-run cards with output and logs.
- * Auto-refreshes every 2s while the run is active (running/queued).
- * Supports cancelling active runs and replaying completed/failed ones.
- */
-
 import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { api, type FlowRunSummary, type FlowSummary } from '../api.js';
 import StatusBadge from '../components/StatusBadge.js';
 import FlowGraph from '../components/FlowGraph.js';
 import StepDetailPanel from '../components/StepDetailPanel.js';
+import LoadingSpinner from '../components/LoadingSpinner.js';
+import Breadcrumb from '../components/Breadcrumb.js';
+import Button from '../components/ui/Button.js';
+import { useToast } from '../contexts/ToastContext.js';
 
-/** Detailed view of a single flow run with live updates, cancel, and replay */
 export default function RunDetail() {
   const { runId } = useParams<{ runId: string }>();
   const [run, setRun] = useState<FlowRunSummary | null>(null);
   const [flow, setFlow] = useState<FlowSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [cancelError, setCancelError] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const [replaying, setReplaying] = useState(false);
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
   const navigate = useNavigate();
+  const { addToast } = useToast();
 
   useEffect(() => {
     if (!runId) return;
+    const controller = new AbortController();
     api.getRun(runId)
       .then((r) => {
+        if (controller.signal.aborted) return;
         setRun(r);
         return api.getFlow(r.flowId);
       })
-      .then(setFlow)
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
+      .then((f) => { if (f && !controller.signal.aborted) setFlow(f); })
+      .catch((err) => { if (!controller.signal.aborted) setError(err.message); })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    return () => controller.abort();
   }, [runId]);
 
   // Auto-refresh while run is active
@@ -55,13 +52,13 @@ export default function RunDetail() {
   const handleCancel = async () => {
     if (!runId) return;
     setCancelling(true);
-    setCancelError(null);
     try {
       await api.cancelRun(runId);
       const updated = await api.getRun(runId);
       setRun(updated);
+      addToast('Run cancelled', 'info');
     } catch (err) {
-      setCancelError(err instanceof Error ? err.message : 'Cancel failed');
+      addToast(err instanceof Error ? err.message : 'Cancel failed', 'error');
     } finally {
       setCancelling(false);
     }
@@ -70,28 +67,30 @@ export default function RunDetail() {
   const handleReplay = async () => {
     if (!run) return;
     setReplaying(true);
-    setCancelError(null);
     try {
       await api.triggerFlow(run.flowId, { type: run.trigger.type, data: run.trigger.data });
+      addToast('Run replayed', 'success');
       navigate(`/flows/${run.flowId}`);
     } catch (err) {
-      setCancelError(err instanceof Error ? err.message : 'Replay failed');
+      addToast(err instanceof Error ? err.message : 'Replay failed', 'error');
     } finally {
       setReplaying(false);
     }
   };
 
-  if (loading) return <p className="text-gray-500">Loading...</p>;
-  if (error) return <p className="text-red-600">Error: {error}</p>;
-  if (!run) return <p className="text-red-600">Run not found</p>;
+  if (loading) return <div className="flex justify-center py-12"><LoadingSpinner size="lg" /></div>;
+  if (error) return <p className="text-red-600" role="alert">Error: {error}</p>;
+  if (!run) return <p className="text-red-600" role="alert">Run not found</p>;
 
   const stepEntries = Object.values(run.stepRuns);
 
   return (
     <div>
-      <div className="mb-6">
-        <Link to={`/flows/${run.flowId}`} className="text-sm text-blue-600 hover:text-blue-800">&larr; Back to flow</Link>
-      </div>
+      <Breadcrumb items={[
+        { label: 'Flows', href: '/flows' },
+        { label: flow?.name ?? run.flowId.slice(0, 12), href: `/flows/${run.flowId}` },
+        { label: `Run ${run.id.slice(0, 8)}` },
+      ]} />
 
       <div className="flex items-start justify-between mb-8">
         <div>
@@ -107,36 +106,23 @@ export default function RunDetail() {
             {run.completedAt && <span>Completed: {new Date(run.completedAt).toLocaleString()}</span>}
           </div>
         </div>
-        <div className="text-right">
-          <div className="flex gap-2">
-            {(run.status === 'completed' || run.status === 'failed' || run.status === 'cancelled') && (
-              <button
-                onClick={handleReplay}
-                disabled={replaying}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm font-medium"
-              >
-                {replaying ? 'Replaying...' : 'Replay Run'}
-              </button>
-            )}
-            {(run.status === 'running' || run.status === 'queued') && (
-              <button
-                onClick={handleCancel}
-                disabled={cancelling}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 text-sm font-medium"
-              >
-                {cancelling ? 'Cancelling...' : 'Cancel Run'}
-              </button>
-            )}
-          </div>
-          {cancelError && (
-            <p className="text-red-600 text-sm mt-1">{cancelError}</p>
+        <div className="flex gap-2">
+          {(run.status === 'completed' || run.status === 'failed' || run.status === 'cancelled') && (
+            <Button onClick={handleReplay} loading={replaying}>
+              Replay Run
+            </Button>
+          )}
+          {(run.status === 'running' || run.status === 'queued') && (
+            <Button variant="danger" onClick={handleCancel} loading={cancelling}>
+              Cancel Run
+            </Button>
           )}
         </div>
       </div>
 
       {/* Run-level error */}
       {run.error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6" role="alert">
           <p className="text-red-800 font-medium">Run failed at step: {run.error.stepId}</p>
           <p className="text-red-700 text-sm mt-1">{run.error.error.message}</p>
         </div>
@@ -185,7 +171,7 @@ export default function RunDetail() {
                 </div>
 
                 {step.error && (
-                  <div className="bg-red-50 rounded p-3 mt-2 text-sm">
+                  <div className="bg-red-50 rounded p-3 mt-2 text-sm" role="alert">
                     <span className="text-red-700 font-medium">{step.error.code}</span>
                     <span className="text-red-600 ml-2">{step.error.message}</span>
                     <span className="text-gray-500 ml-2">({step.error.category}{step.error.retryable ? ', retryable' : ''})</span>

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { api } from '../api.js';
 import FlowBuilder from '../components/flow-builder/FlowBuilder.js';
+import LoadingSpinner from '../components/LoadingSpinner.js';
 import type { FlowBuilderState, FlowErrorPolicy, StepDefinition } from '../components/flow-builder/useFlowBuilderState.js';
 
 export default function CreateFlow() {
@@ -15,8 +16,10 @@ export default function CreateFlow() {
 
   useEffect(() => {
     if (!flowId) return;
+    const controller = new AbortController();
     api.getFlow(flowId)
       .then((flow) => {
+        if (controller.signal.aborted) return;
         setInitialState({
           name: flow.name,
           description: flow.description ?? '',
@@ -27,7 +30,10 @@ export default function CreateFlow() {
           functions: flow.functions ?? [],
         });
       })
-      .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load flow'));
+      .catch((err) => {
+        if (!controller.signal.aborted) setError(err instanceof Error ? err.message : 'Failed to load flow');
+      });
+    return () => controller.abort();
   }, [flowId]);
 
   const handleSubmit = async (definition: Record<string, unknown>) => {
@@ -46,7 +52,7 @@ export default function CreateFlow() {
   };
 
   if (isEdit && initialState === null && !error) {
-    return <p className="text-gray-500">Loading...</p>;
+    return <div className="flex justify-center py-12"><LoadingSpinner size="lg" /></div>;
   }
 
   return (
@@ -59,7 +65,7 @@ export default function CreateFlow() {
       </div>
 
       {error && (
-        <div className="mb-4 bg-red-50 border border-red-200 rounded p-3 text-red-700 text-sm">
+        <div className="mb-4 bg-red-50 border border-red-200 rounded p-3 text-red-700 text-sm" role="alert">
           {error}
         </div>
       )}

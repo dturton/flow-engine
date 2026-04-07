@@ -120,7 +120,9 @@ export async function flowRoutes(app: FastifyInstance, deps: AppDeps): Promise<v
    * POST /api/flows/:flowId/trigger — enqueue a flow execution as a BullMQ
    * job for the worker. Returns 202 with the job ID immediately.
    */
-  app.post('/api/flows/:flowId/trigger', async (request, reply) => {
+  app.post('/api/flows/:flowId/trigger', {
+    config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
+  }, async (request, reply) => {
     const { flowId } = request.params as { flowId: string };
     const flow = await deps.flowRepository.findById(flowId);
     if (!flow) {
@@ -143,6 +145,8 @@ export async function flowRoutes(app: FastifyInstance, deps: AppDeps): Promise<v
     }, {
       jobId: crypto.randomUUID(),
       attempts: 1,
+      removeOnComplete: { count: 1000 },
+      removeOnFail: { count: 5000 },
     });
 
     return reply.status(202).send({

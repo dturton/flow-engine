@@ -440,9 +440,9 @@ export class FlowEngine {
     // to avoid a circular dependency. ConnectorApiError exposes a toStepError() method.
     if (
       err instanceof Error &&
-      typeof (err as Record<string, unknown>).toStepError === 'function'
+      typeof (err as unknown as Record<string, unknown>).toStepError === 'function'
     ) {
-      return (err as { toStepError(): StepError }).toStepError();
+      return (err as unknown as { toStepError(): StepError }).toStepError();
     }
 
     const error = err instanceof Error ? err : new Error(String(err));

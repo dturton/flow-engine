@@ -6,6 +6,10 @@
  */
 
 import type { Connector } from '@flow-engine/core';
+import { validateUrl } from '../utils/url-validator.js';
+
+/** Default request timeout in milliseconds. */
+const DEFAULT_TIMEOUT_MS = 30_000;
 
 /**
  * Stateless HTTP connector — sends a single request per execution using
@@ -16,30 +20,51 @@ export class HttpConnector implements Connector {
     const url = inputs.url as string;
     if (!url) throw new Error('HttpConnector requires a "url" input');
 
+    // SSRF protection: validate URL before making the request
+    await validateUrl(url);
+
     const method = ((inputs.method as string) ?? 'GET').toUpperCase();
     const headers = (inputs.headers as Record<string, string>) ?? {};
     const body = inputs.body;
+    const timeoutMs = typeof inputs.timeoutMs === 'number' ? inputs.timeoutMs : DEFAULT_TIMEOUT_MS;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     const init: RequestInit = {
       method,
       headers: { 'Content-Type': 'application/json', ...headers },
+      signal: controller.signal,
     };
 
     if (body && method !== 'GET' && method !== 'HEAD') {
       init.body = typeof body === 'string' ? body : JSON.stringify(body);
     }
 
-    const response = await fetch(url, init);
-    const contentType = response.headers.get('content-type') ?? '';
-    const responseBody = contentType.includes('application/json')
-      ? await response.json()
-      : await response.text();
+    try {
+      const response = await fetch(url, init);
 
-    return {
-      status: response.status,
-      statusText: response.statusText,
-      headers: Object.fromEntries(response.headers.entries()),
-      body: responseBody,
-    };
+      let responseBody: unknown;
+      try {
+        responseBody = await response.json();
+      } catch {
+        responseBody = await response.text();
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          `HTTP ${response.status} ${response.statusText}: ${typeof responseBody === 'string' ? responseBody : JSON.stringify(responseBody)}`
+        );
+      }
+
+      return {
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries()),
+        body: responseBody,
+      };
+    } finally {
+      clearTimeout(timeoutId);
+    }
   }
 }

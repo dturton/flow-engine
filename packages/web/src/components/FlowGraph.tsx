@@ -129,7 +129,7 @@ function FlowGraphInner({ steps, stepRuns, onStepSelect, selectedStepId }: FlowG
   }, [onStepSelect]);
 
   return (
-    <div className="bg-white rounded-lg shadow" style={{ height: 400 }}>
+    <div className="bg-white rounded-lg shadow h-64 md:h-96">
       <ReactFlow
         nodes={nodes.map((n) => ({ ...n, selected: n.id === selectedStepId }))}
         edges={edges}

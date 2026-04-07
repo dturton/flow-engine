@@ -8,6 +8,7 @@
 import { randomBytes } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { verifySignature } from '@flow-engine/core';
+import type { Webhook } from '@flow-engine/core';
 import type { AppDeps } from '../deps.js';
 
 /** Generate a random URL-safe path segment for a new webhook. */
@@ -18,6 +19,15 @@ function generatePath(): string {
 /** Generate a random HMAC signing secret for webhook signature verification. */
 function generateSecret(): string {
   return randomBytes(32).toString('hex');
+}
+
+/** Headers to strip from webhook trigger data before enqueueing. */
+const SENSITIVE_HEADERS = ['authorization', 'cookie', 'x-api-key'];
+
+/** Return a copy of the webhook object without the secret field. */
+function omitSecret(webhook: Webhook): Omit<Webhook, 'secret'> {
+  const { secret: _, ...rest } = webhook;
+  return rest;
 }
 
 /** Register webhook management and public trigger routes. */
@@ -35,6 +45,7 @@ export async function webhookRoutes(app: FastifyInstance, deps: AppDeps): Promis
 
     const webhook = await deps.webhookRepository.create({ flowId, path, secret });
 
+    // Return full webhook including secret only on creation
     return reply.status(201).send(webhook);
   });
 
@@ -42,7 +53,7 @@ export async function webhookRoutes(app: FastifyInstance, deps: AppDeps): Promis
   app.get('/api/flows/:flowId/webhooks', async (request, reply) => {
     const { flowId } = request.params as { flowId: string };
     const webhooks = await deps.webhookRepository.findByFlowId(flowId);
-    return reply.send(webhooks);
+    return reply.send(webhooks.map(omitSecret));
   });
 
   /** DELETE /api/webhooks/:webhookId — deactivate and remove a webhook. */
@@ -63,7 +74,10 @@ export async function webhookRoutes(app: FastifyInstance, deps: AppDeps): Promis
    * enqueues a flow execution job via BullMQ and returns 202.
    */
   app.post('/webhooks/:path', {
-    config: { rawBody: true },
+    config: {
+      rawBody: true,
+      rateLimit: { max: 60, timeWindow: '1 minute' },
+    },
   }, async (request, reply) => {
     const { path } = request.params as { path: string };
 
@@ -90,11 +104,18 @@ export async function webhookRoutes(app: FastifyInstance, deps: AppDeps): Promis
       return reply.status(404).send({ error: 'Flow not found' });
     }
 
+    // Strip sensitive headers before including in job data
+    const sanitizedHeaders = Object.fromEntries(
+      Object.entries(request.headers).filter(
+        ([key]) => !SENSITIVE_HEADERS.includes(key.toLowerCase()),
+      ),
+    );
+
     const trigger = {
       type: 'webhook' as const,
       data: {
         body: request.body ?? {},
-        headers: request.headers,
+        headers: sanitizedHeaders,
         query: request.query,
         webhookId: webhook.id,
         webhookPath: webhook.path,
@@ -108,6 +129,8 @@ export async function webhookRoutes(app: FastifyInstance, deps: AppDeps): Promis
     }, {
       jobId: crypto.randomUUID(),
       attempts: 1,
+      removeOnComplete: { count: 1000 },
+      removeOnFail: { count: 5000 },
     });
 
     return reply.status(202).send({
