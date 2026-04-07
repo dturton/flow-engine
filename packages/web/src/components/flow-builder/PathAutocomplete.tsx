@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import type { MappingExpression, StepDefinition } from './useFlowBuilderState.js';
+import { CONNECTOR_MAP, type OutputField } from './connectorConfig.js';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -37,6 +38,31 @@ type TreeNode = {
   children?: Record<string, TreeNode>;
   hint?: string;
 };
+
+/** Convert OutputField[] to TreeNode children, recursively. */
+function outputFieldsToTree(fields: OutputField[]): Record<string, TreeNode> {
+  const result: Record<string, TreeNode> = {};
+  for (const f of fields) {
+    result[f.key] = {
+      hint: f.hint,
+      ...(f.children ? { children: outputFieldsToTree(f.children) } : {}),
+    };
+  }
+  return result;
+}
+
+/**
+ * Build a TreeNode children map for a step's `data` key based on the connector's
+ * output field definitions. Returns undefined if no schema is available.
+ */
+function buildOutputTree(step: StepDefinition | undefined): Record<string, TreeNode> | undefined {
+  if (!step || step.type !== 'action' || !step.connectorKey) return undefined;
+  const connector = CONNECTOR_MAP[step.connectorKey];
+  if (!connector) return undefined;
+  const op = connector.operations.find((o) => o.id === step.operationId);
+  if (!op?.outputFields?.length) return undefined;
+  return outputFieldsToTree(op.outputFields);
+}
 
 /**
  * Build a virtual path tree for autocompletion.
@@ -78,10 +104,11 @@ export function getCompletions(
   const stepsChildren: Record<string, TreeNode> = {};
   for (const id of upstreamIds) {
     const step = stepMap.get(id);
+    const dataChildren = buildOutputTree(step);
     stepsChildren[id] = {
       hint: step ? step.name : id,
       children: {
-        data: { hint: 'step output' },
+        data: { hint: 'step output', ...(dataChildren ? { children: dataChildren } : {}) },
       },
     };
   }
