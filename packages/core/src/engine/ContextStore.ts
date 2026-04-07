@@ -97,8 +97,9 @@ export class ContextStore {
     }
 
     // Atomically merge into the context via Lua to avoid read-modify-write races
-    const result = await (this.redis as Redis & { eval: (...args: unknown[]) => Promise<unknown> })
-      .eval(ContextStore.COMMIT_LUA, 1, key, stepId, JSON.stringify(valueToStore), this.ttl);
+    const result = await this.redis.eval(
+      ContextStore.COMMIT_LUA, 1, key, stepId, JSON.stringify(valueToStore), this.ttl,
+    );
 
     if (result === null) {
       throw new ContextStoreError(`Context not found for run: ${runId}`);

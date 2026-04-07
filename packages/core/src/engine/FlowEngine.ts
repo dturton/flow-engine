@@ -213,8 +213,7 @@ export class FlowEngine {
     const completedStepIds = new Set<string>();
     const failedStepIds = new Set<string>();
     const startedStepIds = new Set<string>();
-    // Collect the set of step IDs that a branch has routed to (nextStepId).
-    // Steps that depend on a branch step but are NOT the chosen target are blocked.
+    // Map of branchStepId → chosen targetStepId, used to block non-target dependents
     const branchTargets = new Map<string, string>();
 
     for (const [stepId, stepRun] of Object.entries(run.stepRuns)) {
